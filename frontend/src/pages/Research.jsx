@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import AnalystHistoryStrip from '../components/research/AnalystHistoryStrip';
 import DividendHistoryList from '../components/research/DividendHistoryList';
@@ -13,6 +14,7 @@ import {
   SectionCard,
   SkeletonRow,
 } from '../components/research/primitives';
+import ResearchActions from '../components/research/ResearchActions';
 import ResearchCommandBar from '../components/research/ResearchCommandBar';
 import ResearchSidebar from '../components/research/ResearchSidebar';
 import TechnicalsTab from '../components/research/TechnicalsTab';
@@ -26,8 +28,11 @@ import {
   normalizePricePoints,
   TEXT_COLOR,
 } from '../components/results/tabs/priceChartUtils';
+import TickerSearchBar from '../components/TickerSearchBar';
+import { AI_AGENT_PATH } from '../constants/routes';
 import { useQuoteLite } from '../hooks/useQuoteLite';
 import { useStockOverview } from '../hooks/useStockOverview';
+import { useWatchlistStore } from '../hooks/useWatchlistStore';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { signClass as baseSignClass } from '../utils/formatting';
 import { saveRecentTicker } from '../utils/recentTickers';
@@ -77,7 +82,7 @@ function recommendationColor(rec) {
 
 const DETAIL_TABS = ['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS'];
 
-function StockHeader({ data, loading, activeTab, onTabChange }) {
+function StockHeader({ data, loading, activeTab, onTabChange, actions = null }) {
   const [descExpanded, setDescExpanded] = useState(false);
   const price = data?.price;
   const prevClose = data?.prev_close;
@@ -158,22 +163,25 @@ function StockHeader({ data, loading, activeTab, onTabChange }) {
           </>
         )}
       </div>
-      <div className="flex px-4 gap-6">
-        {DETAIL_TABS.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => onTabChange(tab)}
-            aria-current={activeTab === tab ? 'true' : undefined}
-            className={`py-2 font-mono text-[11px] border-b-2 transition-colors ${
-              activeTab === tab
-                ? 'border-bloomberg-orange text-bloomberg-orange'
-                : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white'
-            }`}
-          >
-            {activeTab === tab ? `${tab} ●` : tab}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 px-4">
+        <div className="flex gap-6">
+          {DETAIL_TABS.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => onTabChange(tab)}
+              aria-current={activeTab === tab ? 'true' : undefined}
+              className={`py-2 font-mono text-[11px] border-b-2 transition-colors ${
+                activeTab === tab
+                  ? 'border-bloomberg-orange text-bloomberg-orange'
+                  : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white'
+              }`}
+            >
+              {activeTab === tab ? `${tab} ●` : tab}
+            </button>
+          ))}
+        </div>
+        {actions}
       </div>
     </div>
   );
@@ -183,6 +191,7 @@ StockHeader.propTypes = {
   loading: PropTypes.bool,
   activeTab: PropTypes.string.isRequired,
   onTabChange: PropTypes.func.isRequired,
+  actions: PropTypes.node,
 };
 
 const VOL_WIDTH = 1000;
@@ -802,6 +811,80 @@ LoadFailure.propTypes = {
   onRetry: PropTypes.func.isRequired,
 };
 
+const COMPARE_CARDS = [
+  ['valuation', ValuationCard],
+  ['profitability', ProfitabilityCard],
+  ['growth', GrowthIncomeCard],
+  ['consensus', AnalystConsensusCard],
+];
+
+function CompareBar({ ticker, onPick }) {
+  const pick = (symbol) => {
+    const next = String(symbol || '')
+      .trim()
+      .toUpperCase();
+    if (next) onPick(next);
+  };
+  return (
+    <div className="flex items-center gap-3 border border-bloomberg-border bg-bloomberg-card px-3 py-1.5">
+      <span className="shrink-0 font-mono text-[10px] uppercase tracking-[0.2em] text-bloomberg-orange">
+        COMPARE WITH
+      </span>
+      <div className="flex-1 [&_input]:text-[12px] [&_input]:text-white">
+        <TickerSearchBar
+          bare
+          value={ticker || ''}
+          placeholder="Search a ticker to compare"
+          onSelect={(item) => pick(item.symbol)}
+          onSubmit={pick}
+          onClear={() => {}}
+        />
+      </div>
+    </div>
+  );
+}
+CompareBar.propTypes = { ticker: PropTypes.string, onPick: PropTypes.func.isRequired };
+
+// Side-by-side valuation / profitability / growth / consensus. Deliberately not the whole
+// overview grid: the chart plus ten cards twice would be unreadable at normal widths.
+function CompareSection({ primary, compare }) {
+  return (
+    <div data-testid="compare-section" className="space-y-3">
+      <div className="grid grid-cols-2 gap-3">
+        <div className="font-mono text-[11px] font-bold text-bloomberg-orange">
+          {primary.ticker}
+        </div>
+        <div className="font-mono text-[11px] font-bold text-bloomberg-orange">
+          {compare.ticker}
+        </div>
+      </div>
+      {compare.error && (
+        <LoadFailure message={`FAILED TO LOAD: ${compare.error}`} onRetry={compare.retry} />
+      )}
+      {COMPARE_CARDS.map(([key, Card]) => (
+        <div key={key} className="grid grid-cols-2 gap-3">
+          <Card data={primary.data} loading={primary.loading} />
+          {!compare.error && <Card data={compare.data} loading={compare.loading} />}
+        </div>
+      ))}
+    </div>
+  );
+}
+CompareSection.propTypes = {
+  primary: PropTypes.shape({
+    ticker: PropTypes.string,
+    data: PropTypes.object,
+    loading: PropTypes.bool,
+  }).isRequired,
+  compare: PropTypes.shape({
+    ticker: PropTypes.string,
+    data: PropTypes.object,
+    loading: PropTypes.bool,
+    error: PropTypes.string,
+    retry: PropTypes.func,
+  }).isRequired,
+};
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const RANGE_ORDER = ['1W', '1M', '3M', '6M', '1Y'];
@@ -817,6 +900,14 @@ export default function Research() {
 
   const { data, loading, error, retry } = useStockOverview(activeTicker);
   const { quote } = useQuoteLite(activeTicker);
+  const [comparing, setComparing] = useState(false);
+  const [compareTicker, setCompareTicker] = useState(null);
+  const compareOverview = useStockOverview(compareTicker);
+  const navigate = useNavigate();
+  const { activeGroup, hasTicker, addTicker } = useWatchlistStore();
+  // Canonical symbol from the backend (e.g. BBCA -> BBCA.JK) so the watchlist and the AI
+  // Agent form get the same symbol the quote/analysis endpoints expect.
+  const researchSymbol = data?.ticker || activeTicker;
 
   // Live price/volume over the slow, long-cached fundamentals snapshot. prev_close stays
   // from the snapshot (constant intraday) so the change is always computed consistently.
@@ -824,6 +915,20 @@ export default function Research() {
     if (!data || !quote) return data;
     return { ...data, price: quote.price ?? data.price, volume: quote.volume ?? data.volume };
   }, [data, quote]);
+
+  const handleAddToWatchlist = useCallback(() => {
+    if (!researchSymbol) return;
+    addTicker({ symbol: researchSymbol, name: data?.name, exchange: data?.exchange });
+  }, [addTicker, data?.exchange, data?.name, researchSymbol]);
+
+  const handleRunAnalysis = useCallback(() => {
+    if (researchSymbol) navigate(AI_AGENT_PATH, { state: { prefillTicker: researchSymbol } });
+  }, [navigate, researchSymbol]);
+
+  const handleToggleCompare = useCallback(() => {
+    setComparing((open) => !open);
+    setCompareTicker(null);
+  }, []);
 
   const handleSelect = useCallback((selection) => {
     const item = typeof selection === 'string' ? { symbol: selection } : selection || {};
@@ -939,6 +1044,16 @@ export default function Research() {
                 loading={loading}
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
+                actions={
+                  <ResearchActions
+                    canAdd={Boolean(activeGroup)}
+                    inWatchlist={Boolean(researchSymbol) && hasTicker(researchSymbol)}
+                    comparing={comparing}
+                    onAddToWatchlist={handleAddToWatchlist}
+                    onRunAnalysis={handleRunAnalysis}
+                    onToggleCompare={handleToggleCompare}
+                  />
+                }
               />
 
               {error && <LoadFailure message={`FAILED TO LOAD: ${error}`} onRetry={retry} />}
@@ -949,6 +1064,20 @@ export default function Research() {
                 <div className="px-4 py-2 font-mono text-[10px] text-bloomberg-amber">
                   ■ Some fields unavailable — one or more data vendors did not respond.
                 </div>
+              )}
+
+              {comparing && <CompareBar ticker={compareTicker} onPick={setCompareTicker} />}
+              {comparing && compareTicker && activeTab === 'OVERVIEW' && (
+                <CompareSection
+                  primary={{ ticker: activeTicker, data, loading }}
+                  compare={{
+                    ticker: compareTicker,
+                    data: compareOverview.data,
+                    loading: compareOverview.loading,
+                    error: compareOverview.error,
+                    retry: compareOverview.retry,
+                  }}
+                />
               )}
 
               {activeTab === 'OVERVIEW' && (

@@ -1,11 +1,13 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PropTypes from 'prop-types';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import Research from './Research';
+import { AI_AGENT_PATH } from '../constants/routes';
 import { useQuoteLite } from '../hooks/useQuoteLite';
 import { useStockOverview } from '../hooks/useStockOverview';
+import { useWatchlistStore } from '../hooks/useWatchlistStore';
 
 vi.mock('../components/research/ResearchCommandBar', () => {
   function ResearchCommandBarStub({ onSubmit }) {
@@ -41,6 +43,29 @@ vi.mock('../hooks/useStockOverview', () => ({
       : { loading: false, error: null, data: null }
   ),
 }));
+const navigateMock = vi.hoisted(() => vi.fn());
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => navigateMock,
+}));
+vi.mock('../hooks/useWatchlistStore', () => ({
+  useWatchlistStore: vi.fn(() => ({
+    activeGroup: { id: 'g1', items: [] },
+    hasTicker: () => false,
+    addTicker: vi.fn(() => true),
+  })),
+}));
+vi.mock('../components/TickerSearchBar', () => {
+  function TickerSearchBarStub({ onSubmit }) {
+    return (
+      <button type="button" onClick={() => onSubmit('MSFT')}>
+        submit-compare-ticker
+      </button>
+    );
+  }
+  TickerSearchBarStub.propTypes = { onSubmit: PropTypes.func };
+  return { default: TickerSearchBarStub };
+});
 vi.mock('../components/research/NewsTab', () => ({
   default: function NewsTabStub({ ticker }) {
     return <div data-testid="news-tab">{ticker}</div>;
@@ -424,6 +449,129 @@ describe('Research page', () => {
 
       expect(await screen.findByText('ANALYST CONSENSUS')).toBeTruthy();
       expect(screen.queryByTestId('analyst-history-strip')).toBeNull();
+    });
+  });
+
+  describe('hub actions', () => {
+    const originalOverview = useStockOverview.getMockImplementation();
+    const originalWatchlist = useWatchlistStore.getMockImplementation();
+    afterEach(() => {
+      useStockOverview.mockImplementation(originalOverview);
+      useWatchlistStore.mockImplementation(originalWatchlist);
+      navigateMock.mockClear();
+    });
+
+    const overviewFor = (ticker) => ({
+      loading: false,
+      error: null,
+      retry: vi.fn(),
+      data: ticker
+        ? {
+            ticker,
+            name: `${ticker} Inc.`,
+            exchange: 'NMS',
+            price: 10,
+            prev_close: 9,
+            recommendation: 'BUY',
+          }
+        : null,
+    });
+
+    function setup({ watchlist } = {}) {
+      useStockOverview.mockImplementation(overviewFor);
+      const addTicker = vi.fn(() => true);
+      useWatchlistStore.mockImplementation(
+        () =>
+          watchlist ?? { activeGroup: { id: 'g1', items: [] }, hasTicker: () => false, addTicker }
+      );
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({ points: [] }),
+      });
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+      return { addTicker };
+    }
+
+    it('adds the researched ticker to the active watchlist group', () => {
+      const { addTicker } = setup();
+
+      fireEvent.click(screen.getByRole('button', { name: '+ WATCHLIST' }));
+
+      expect(addTicker).toHaveBeenCalledTimes(1);
+      expect(addTicker).toHaveBeenCalledWith(
+        expect.objectContaining({ symbol: 'AAPL', name: 'AAPL Inc.', exchange: 'NMS' })
+      );
+    });
+
+    it('shows the ticker as already in the watchlist and does not add it twice', () => {
+      setup({
+        watchlist: {
+          activeGroup: { id: 'g1', items: [] },
+          hasTicker: () => true,
+          addTicker: vi.fn(),
+        },
+      });
+
+      const button = screen.getByRole('button', { name: /IN WATCHLIST/ });
+      expect(button.disabled).toBe(true);
+    });
+
+    it('disables adding when the user has no watchlist group', () => {
+      setup({ watchlist: { activeGroup: null, hasTicker: () => false, addTicker: vi.fn() } });
+
+      expect(screen.getByRole('button', { name: '+ WATCHLIST' }).disabled).toBe(true);
+    });
+
+    it('hands the ticker to the AI Agent page via router state', () => {
+      setup();
+
+      fireEvent.click(screen.getByRole('button', { name: 'RUN FULL ANALYSIS' }));
+
+      expect(navigateMock).toHaveBeenCalledWith(AI_AGENT_PATH, {
+        state: { prefillTicker: 'AAPL' },
+      });
+    });
+
+    it('compares two tickers side by side and closes again', () => {
+      setup();
+      expect(screen.queryByTestId('compare-section')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: '+ COMPARE' }));
+      fireEvent.click(screen.getByText('submit-compare-ticker'));
+
+      const section = within(screen.getByTestId('compare-section'));
+      expect(section.getByText('AAPL')).toBeTruthy();
+      expect(section.getByText('MSFT')).toBeTruthy();
+      for (const title of [
+        'VALUATION MULTIPLES',
+        'PROFITABILITY',
+        'GROWTH & INCOME',
+        'ANALYST CONSENSUS',
+      ]) {
+        expect(section.getAllByText(title)).toHaveLength(2);
+      }
+      expect(useStockOverview).toHaveBeenCalledWith('MSFT');
+
+      fireEvent.click(screen.getByRole('button', { name: /CLOSE COMPARE/ }));
+      expect(screen.queryByTestId('compare-section')).toBeNull();
+    });
+
+    it('keeps the primary overview usable while the comparison ticker fails to load', () => {
+      setup();
+      useStockOverview.mockImplementation((ticker) =>
+        ticker === 'MSFT'
+          ? { loading: false, error: 'boom', data: null, retry: vi.fn() }
+          : overviewFor(ticker)
+      );
+
+      fireEvent.click(screen.getByRole('button', { name: '+ COMPARE' }));
+      fireEvent.click(screen.getByText('submit-compare-ticker'));
+
+      const section = within(screen.getByTestId('compare-section'));
+      expect(section.getByText(/FAILED TO LOAD: boom/)).toBeTruthy();
+      expect(section.getAllByText('VALUATION MULTIPLES')).toHaveLength(1);
+      expect(screen.getByText('AAPL Inc.')).toBeTruthy();
     });
   });
 });
