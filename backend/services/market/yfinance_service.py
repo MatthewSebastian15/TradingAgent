@@ -20,6 +20,7 @@ from services.market.symbol_universe import (
 )
 
 OVERVIEW_TTL_SECONDS = 120
+STOCK_OVERVIEW_TTL_SECONDS = 120
 MOVERS_TTL_SECONDS = 180
 VALIDATION_TTL_SECONDS = 3600
 YFINANCE_WORKERS = 8
@@ -273,6 +274,18 @@ def build_stock_overview(symbol: str) -> dict[str, Any]:
         "target_high": f("targetHighPrice"),
         "upside_downside_pct": upside(price, target_mean),
     }
+
+
+def get_stock_overview(symbol: str, *, force_refresh: bool = False) -> dict[str, Any]:
+    """SWR-cached wrapper around build_stock_overview. Concurrent requests for
+    the same symbol coalesce into one yfinance call via the per-key lock."""
+    value, _ = _swr_cached(
+        f"stock_overview:{symbol}",
+        lambda: build_stock_overview(symbol),
+        STOCK_OVERVIEW_TTL_SECONDS,
+        force_refresh=force_refresh,
+    )
+    return value
 
 
 def _series_values(frame: Any, column_name: str) -> list[float]:

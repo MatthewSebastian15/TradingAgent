@@ -68,3 +68,67 @@ def test_build_stock_overview_exposes_financial_currency(monkeypatch):
 
     assert payload["currency"] == "IDR"
     assert payload["financial_currency"] == "USD"
+
+
+def test_get_stock_overview_uses_cache_within_ttl(monkeypatch):
+    service.market_cache.clear()
+    calls = {"n": 0}
+
+    def fake_build(symbol):
+        calls["n"] += 1
+        return {"ticker": symbol, "price": 100.0 + calls["n"]}
+
+    monkeypatch.setattr(service, "build_stock_overview", fake_build)
+
+    first = service.get_stock_overview("AAPL")
+    second = service.get_stock_overview("AAPL")
+
+    assert first == second
+    assert calls["n"] == 1
+
+
+def test_get_stock_overview_force_refresh_bypasses_cache(monkeypatch):
+    service.market_cache.clear()
+    calls = {"n": 0}
+
+    def fake_build(symbol):
+        calls["n"] += 1
+        return {"ticker": symbol, "price": 100.0 + calls["n"]}
+
+    monkeypatch.setattr(service, "build_stock_overview", fake_build)
+
+    service.get_stock_overview("AAPL")
+    refreshed = service.get_stock_overview("AAPL", force_refresh=True)
+
+    assert calls["n"] == 2
+    assert refreshed["price"] == 102.0
+
+
+def test_get_stock_overview_coalesces_concurrent_requests(monkeypatch):
+    import threading
+
+    service.market_cache.clear()
+    calls = {"n": 0}
+    release = threading.Event()
+
+    def fake_build(symbol):
+        calls["n"] += 1
+        release.wait(timeout=2)
+        return {"ticker": symbol, "price": 100.0}
+
+    monkeypatch.setattr(service, "build_stock_overview", fake_build)
+
+    results: list[dict] = []
+    threads = [
+        threading.Thread(target=lambda: results.append(service.get_stock_overview("AAPL")))
+        for _ in range(5)
+    ]
+    for t in threads:
+        t.start()
+    release.set()
+    for t in threads:
+        t.join(timeout=5)
+
+    assert calls["n"] == 1
+    assert len(results) == 5
+    assert all(r == {"ticker": "AAPL", "price": 100.0} for r in results)
