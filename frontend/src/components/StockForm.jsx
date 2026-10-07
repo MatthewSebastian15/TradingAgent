@@ -164,6 +164,7 @@ export default function StockForm({
   useAnalysisJobHook = undefined,
   selectedResult = null,
   tickerSearch = null,
+  initialTicker = '',
 }) {
   const {
     ticker,
@@ -197,6 +198,7 @@ export default function StockForm({
     onAgentProgress,
     useAnalysisJobHook,
     selectedResult,
+    initialTicker,
   });
 
   return (
@@ -407,4 +409,5 @@ StockForm.propTypes = {
   useAnalysisJobHook: PropTypes.func,
   selectedResult: PropTypes.object,
   tickerSearch: PropTypes.func,
+  initialTicker: PropTypes.string,
 };

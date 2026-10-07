@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 
 import { cleanup, configure, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import PropTypes from 'prop-types';
 import React from 'react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -168,6 +169,19 @@ describe('AnalysisWorkspace history storage', () => {
     expect(screen.getByLabelText('Ticker')).toBeTruthy();
     expect(screen.getByRole('button', { name: /execute analysis/i })).toBeTruthy();
     expect(screen.getByText('READY')).toBeTruthy();
+  });
+
+  it('passes formProps through to the form component', () => {
+    function PropsForm({ initialTicker }) {
+      return <div data-testid="form-prop">{initialTicker ?? 'none'}</div>;
+    }
+    PropsForm.propTypes = { initialTicker: PropTypes.string };
+
+    renderWorkspace(PropsForm, 'analysis-history-test', '/analysis', {
+      formProps: { initialTicker: 'MSFT' },
+    });
+
+    expect(screen.getByTestId('form-prop').textContent).toBe('MSFT');
   });
 
   it('clicking HISTORY tab shows history content', async () => {

@@ -32,8 +32,9 @@ export function useStockForm({
   onAgentProgress,
   useAnalysisJobHook = useAnalysisJob,
   selectedResult = null,
+  initialTicker = '',
 }) {
-  const [ticker, setTicker] = useState('');
+  const [ticker, setTicker] = useState(initialTicker || '');
   const [date, setDate] = useState(apiToDisplayDate(today()));
   const [rounds, setRounds] = useState(DEFAULT_DEBATE_ROUNDS);
   const [timeHorizonMonths, setTimeHorizonMonths] = useState(1);

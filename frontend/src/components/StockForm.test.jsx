@@ -380,4 +380,16 @@ describe('StockForm cleanup', () => {
     expect(screen.queryByText('DEFAULT 9-CALL PIPELINE')).toBeNull();
     expect(screen.getByRole('button', { name: /execute analysis/i })).toBeTruthy();
   });
+
+  it('starts with the ticker supplied through initialTicker', () => {
+    render(<StockForm {...callbacks()} initialTicker="MSFT" />);
+
+    expect(screen.getByPlaceholderText(/search ticker symbol/i).value).toBe('MSFT');
+  });
+
+  it('starts empty without initialTicker', () => {
+    render(<StockForm {...callbacks()} />);
+
+    expect(screen.getByPlaceholderText(/search ticker symbol/i).value).toBe('');
+  });
 });

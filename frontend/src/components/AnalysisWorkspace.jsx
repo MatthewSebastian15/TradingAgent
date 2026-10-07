@@ -81,6 +81,7 @@ export default function AnalysisWorkspace({
   lookupResult = null,
   backendHistoryEnabled = true,
   enableReportExport = true,
+  formProps = undefined,
 }) {
   const navigate = useNavigate();
   const { resourceId } = useParams();
@@ -259,6 +260,7 @@ export default function AnalysisWorkspace({
                   selectedResult={result && !result.error ? result : null}
                   agentProgress={agentProgress}
                   status={status}
+                  {...formProps}
                 />
               ) : (
                 <HistoryPanel
@@ -329,4 +331,5 @@ AnalysisWorkspace.propTypes = {
   lookupResult: PropTypes.func,
   backendHistoryEnabled: PropTypes.bool,
   enableReportExport: PropTypes.bool,
+  formProps: PropTypes.object,
 };
