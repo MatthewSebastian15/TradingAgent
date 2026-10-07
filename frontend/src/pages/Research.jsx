@@ -1126,7 +1126,7 @@ export default function Research() {
               <div className="font-mono text-[10px] uppercase tracking-[0.35em] text-bloomberg-orange">
                 ■ RESEARCH
               </div>
-              <p className="font-mono text-xs text-bloomberg-muted">
+              <p className="font-mono text-xs text-bloomberg-white">
                 Enter a ticker above to load its overview, chart, and fundamentals.
               </p>
               <div className="flex flex-wrap justify-center gap-2">

@@ -98,6 +98,15 @@ describe('Research page', () => {
     expect(screen.getByTestId('research-sidebar')).toBeTruthy();
   });
 
+  it('renders the empty-state message in the primary text colour, not the muted label colour', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+    render(<Research />);
+
+    const message = screen.getByText(/enter a ticker above/i);
+    expect(message.className).not.toMatch(/text-bloomberg-muted/);
+    expect(message.className).toMatch(/text-bloomberg-white/);
+  });
+
   it('lets the user load an example ticker from the empty state', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
     render(<Research />);
