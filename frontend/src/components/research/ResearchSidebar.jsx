@@ -1,7 +1,9 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import PropTypes from 'prop-types';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
+import { WATCHLIST_PATH } from '../../constants/routes';
 import { SIDEBAR_COLLAPSED_WIDTH, SIDEBAR_EXPANDED_WIDTH } from '../../constants/sidebar';
 import { useWatchlistStore } from '../../hooks/useWatchlistStore';
 import { readRecentTickers } from '../../utils/recentTickers';
@@ -85,8 +87,26 @@ export default function ResearchSidebar({ activeTicker, collapsed, onToggle, onS
       </div>
       <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:hidden">
         {rows.length === 0 ? (
-          <div className="flex h-full items-center justify-center font-mono text-[11px] text-[#444]">
-            NO TICKERS
+          <div className="flex h-full flex-col items-center justify-center gap-2 px-4 text-center font-mono">
+            {tab === 'RECENT' ? (
+              <>
+                <div className="text-[11px] text-bloomberg-white/60">No recent tickers yet</div>
+                <div className="text-[10px] text-bloomberg-white/60">
+                  Search a ticker above to start.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-[11px] text-bloomberg-white/60">Watchlist is empty</div>
+                <div className="text-[10px] text-bloomberg-white/60">
+                  Add a ticker from Overview, or open{' '}
+                  <Link to={WATCHLIST_PATH} className="text-bloomberg-orange hover:underline">
+                    Watchlist
+                  </Link>
+                  .
+                </div>
+              </>
+            )}
           </div>
         ) : (
           rows.map((item) => (

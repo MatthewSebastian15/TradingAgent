@@ -1,8 +1,10 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ResearchSidebar from './ResearchSidebar';
+import { useWatchlistStore } from '../../hooks/useWatchlistStore';
 import { readRecentTickers } from '../../utils/recentTickers';
 
 vi.mock('../../hooks/useWatchlistStore', () => ({
@@ -18,13 +20,21 @@ function renderSidebar(props = {}) {
   const onToggle = vi.fn();
   const onSelect = vi.fn();
   render(
-    <ResearchSidebar activeTicker="AAPL" onToggle={onToggle} onSelect={onSelect} {...props} />
+    <MemoryRouter>
+      <ResearchSidebar activeTicker="AAPL" onToggle={onToggle} onSelect={onSelect} {...props} />
+    </MemoryRouter>
   );
   return { onToggle, onSelect };
 }
 
 describe('ResearchSidebar', () => {
-  afterEach(() => cleanup());
+  const originalRecent = readRecentTickers.getMockImplementation();
+  const originalWatchlist = useWatchlistStore.getMockImplementation();
+  afterEach(() => {
+    cleanup();
+    readRecentTickers.mockImplementation(originalRecent);
+    useWatchlistStore.mockImplementation(originalWatchlist);
+  });
 
   it('renders only an expand button when collapsed', () => {
     const { onToggle } = renderSidebar({ collapsed: true });
@@ -51,10 +61,23 @@ describe('ResearchSidebar', () => {
     expect(screen.queryByText('AAPL-NMS')).toBeNull();
   });
 
-  it('shows the empty message when a tab has no tickers', () => {
-    readRecentTickers.mockReturnValueOnce([]);
+  it('shows tab-specific empty copy', () => {
+    readRecentTickers.mockReturnValue([]);
+    useWatchlistStore.mockReturnValue({ activeGroup: { items: [] } });
     renderSidebar();
 
-    expect(screen.getByText('NO TICKERS')).toBeTruthy();
+    expect(screen.getByText('No recent tickers yet')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'WATCHLIST' }));
+    expect(screen.getByText('Watchlist is empty')).toBeTruthy();
+  });
+
+  it('links the empty watchlist state to the Watchlist page', () => {
+    useWatchlistStore.mockReturnValue({ activeGroup: { items: [] } });
+    renderSidebar();
+
+    fireEvent.click(screen.getByRole('button', { name: 'WATCHLIST' }));
+    expect(screen.getByRole('link', { name: /watchlist/i }).getAttribute('href')).toBe(
+      '/watchlist'
+    );
   });
 });

@@ -952,6 +952,7 @@ CompareSection.propTypes = {
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 const RANGE_ORDER = ['1W', '1M', '3M', '6M', '1Y'];
+const EXAMPLE_TICKERS = ['AAPL', 'MSFT', 'BBCA.JK', '^GSPC'];
 
 export default function Research() {
   const [activeTicker, setActiveTicker] = useState(null);
@@ -1117,8 +1118,20 @@ export default function Research() {
                 ■ RESEARCH
               </div>
               <p className="font-mono text-xs text-bloomberg-muted">
-                Enter a ticker to load stock overview
+                Enter a ticker above to load its overview, chart, and fundamentals.
               </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {EXAMPLE_TICKERS.map((example) => (
+                  <button
+                    key={example}
+                    type="button"
+                    onClick={() => handleSelect(example)}
+                    className="border border-bloomberg-border px-3 py-1.5 font-mono text-[11px] text-bloomberg-white/80 transition-colors hover:border-bloomberg-orange hover:text-bloomberg-orange"
+                  >
+                    {example}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

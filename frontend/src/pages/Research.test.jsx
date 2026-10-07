@@ -94,8 +94,18 @@ describe('Research page', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
     render(<Research />);
 
-    expect(screen.getByText('Enter a ticker to load stock overview')).toBeTruthy();
+    expect(screen.getByText(/enter a ticker above/i)).toBeTruthy();
     expect(screen.getByTestId('research-sidebar')).toBeTruthy();
+  });
+
+  it('lets the user load an example ticker from the empty state', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+    render(<Research />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'AAPL' }));
+
+    expect(await screen.findByText('Apple Inc.')).toBeTruthy();
+    expect(screen.queryByText(/enter a ticker above/i)).toBeNull();
   });
 
   it('loads the overview cards after a ticker is submitted', async () => {
