@@ -18,6 +18,7 @@ from core.schemas import (
     MarketOverviewRequest,
     MarketOverviewResponse,
     MarketPresetsResponse,
+    MarketQuote,
     MarketQuotesResponse,
     StockOverviewResponse,
     SymbolValidationResponse,
@@ -30,10 +31,12 @@ from services.market.ohlcv_service import (
 )
 from services.market.search_index import get_popular_tickers, search_local_tickers
 from services.market.yfinance_service import (
+    _fetch_quote,
     dedupe_symbols,
     get_market_movers,
     get_market_presets,
     get_overview_data,
+    get_quote_lite_cached,
     get_stock_overview,
     normalize_market_symbol,
     validate_symbol,
@@ -278,57 +281,16 @@ async def get_stock_overview_data(
         return await asyncio.to_thread(get_stock_overview, normalized, force_refresh=force_refresh)
 
 
-def _fast_info_value(info: Any, *names: str) -> Any:
-    for name in names:
-        if isinstance(info, dict) and name in info:
-            return info.get(name)
-        value = getattr(info, name, None)
-        if value is not None:
-            return value
-    return None
-
-
-def _fetch_quote(symbol: str) -> dict:
-    """Return a minimal quote dict for *symbol* using yfinance fast_info."""
-    try:
-        from tradingagents.dataflows.providers.yfinance_runtime import yf  # noqa: PLC0415
-
-        ticker = yf.Ticker(symbol)
-        info = ticker.fast_info
-
-        # fast_info attributes vary by symbol/exchange; fall back gracefully.
-        previous_close = _fast_info_value(info, "previous_close", "regularMarketPreviousClose")
-        last_price = _fast_info_value(info, "last_price", "regularMarketPrice")
-        volume = _as_float(_fast_info_value(info, "last_volume", "regularMarketVolume", "volume"))
-
-        if previous_close and last_price and previous_close != 0:
-            raw_chg = (last_price - previous_close) / previous_close * 100
-            sign = "+" if raw_chg >= 0 else ""
-            chg_str = f"{sign}{raw_chg:.2f}%"
-            pos = raw_chg >= 0
-        else:
-            chg_str = "N/A"
-            pos = True
-
-        return {
-            "sym": symbol,
-            "chg": chg_str,
-            "pos": pos,
-            "price": round(last_price, 2) if last_price else None,
-            "volume": volume,
-            "error": False,
-        }
-
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Failed to fetch quote for %s: %s", symbol, exc)
-        return {
-            "sym": symbol,
-            "chg": "N/A",
-            "pos": True,
-            "price": None,
-            "volume": None,
-            "error": True,
-        }
+@router.get("/market/quote-lite", tags=["market"], response_model=MarketQuote)
+async def get_quote_lite(
+    request: Request,
+    ticker: str = Query(..., min_length=1, description="Ticker symbol, e.g. BBCA.JK"),
+) -> dict[str, Any]:
+    """Fast, short-TTL price/volume for one symbol (yfinance fast_info), meant to be
+    polled while the slow fundamentals snapshot stays cached."""
+    async with _market_data_limit(request):
+        normalized = _normalize_quote_symbol(ticker)
+        return await asyncio.to_thread(get_quote_lite_cached, normalized)
 
 
 _QUOTE_FETCH_TIMEOUT_SECONDS = 12.0

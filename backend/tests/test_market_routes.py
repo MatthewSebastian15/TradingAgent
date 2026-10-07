@@ -434,3 +434,36 @@ def test_stock_overview_accepts_common_symbol_shapes(client, monkeypatch):
         response = client.get(f"/api/market/stock-overview?ticker={symbol}")
         assert response.status_code == 200, symbol
         assert response.json()["ticker"] == symbol
+
+
+def test_quote_lite_returns_cached_fast_info_quote(client, monkeypatch):
+    seen = []
+
+    def fake_quote_lite(symbol):
+        seen.append(symbol)
+        return {
+            "sym": symbol,
+            "chg": "+1.00%",
+            "pos": True,
+            "price": 101.0,
+            "volume": 1000,
+            "error": False,
+        }
+
+    monkeypatch.setattr(market_routes, "get_quote_lite_cached", fake_quote_lite)
+
+    response = client.get("/api/market/quote-lite?ticker=aapl")
+
+    assert response.status_code == 200
+    assert response.json()["price"] == 101.0
+    assert seen == ["AAPL"]
+
+
+def test_quote_lite_rejects_malformed_ticker_before_vendor_call(client, monkeypatch):
+    def must_not_run(_symbol):
+        raise AssertionError("vendor path must not run for an invalid ticker")
+
+    monkeypatch.setattr(market_routes, "get_quote_lite_cached", must_not_run)
+
+    assert client.get("/api/market/quote-lite?ticker=" + "x" * 25).status_code == 400
+    assert client.get("/api/market/quote-lite?ticker=AAPL;DROP").status_code == 400

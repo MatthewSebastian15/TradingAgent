@@ -25,7 +25,11 @@ from services.market.symbol_universe import (
 logger = logging.getLogger(__name__)
 
 OVERVIEW_TTL_SECONDS = 120
-STOCK_OVERVIEW_TTL_SECONDS = 120
+# Fundamentals (sector, ratios, margins) barely move intraday; price comes from quote-lite.
+FUNDAMENTALS_TTL_SECONDS = 900
+# A partial/unavailable snapshot is retried soon instead of being pinned for 15 minutes.
+DEGRADED_FUNDAMENTALS_TTL_SECONDS = 30
+QUOTE_LITE_TTL_SECONDS = 8.0
 MOVERS_TTL_SECONDS = 180
 VALIDATION_TTL_SECONDS = 3600
 YFINANCE_WORKERS = 8
@@ -433,13 +437,80 @@ def build_stock_overview_with_fallback(symbol: str) -> dict[str, Any]:
 def get_stock_overview(symbol: str, *, force_refresh: bool = False) -> dict[str, Any]:
     """SWR-cached wrapper around build_stock_overview_with_fallback. Concurrent
     requests for the same symbol coalesce into one vendor round trip via the per-key lock."""
-    value, _ = _swr_cached(
-        f"stock_overview:{symbol}",
+    cache_key = f"fundamentals:{symbol}"
+    value, from_cache = _swr_cached(
+        cache_key,
         lambda: build_stock_overview_with_fallback(symbol),
-        STOCK_OVERVIEW_TTL_SECONDS,
+        FUNDAMENTALS_TTL_SECONDS,
         force_refresh=force_refresh,
     )
+    if not from_cache and value.get("data_quality") != "complete":
+        market_cache.set(cache_key, value, DEGRADED_FUNDAMENTALS_TTL_SECONDS)
     return value
+
+
+def get_quote_lite_cached(symbol: str) -> dict[str, Any]:
+    """Short-TTL SWR cache over fast_info quotes; concurrent pollers share one fetch."""
+    value, _ = _swr_cached(
+        f"quote_lite:{symbol}",
+        lambda: _fetch_quote(symbol),
+        QUOTE_LITE_TTL_SECONDS,
+        force_refresh=False,
+    )
+    return value
+
+
+def _fast_info_value(info: Any, *names: str) -> Any:
+    for name in names:
+        if isinstance(info, dict) and name in info:
+            return info.get(name)
+        value = getattr(info, name, None)
+        if value is not None:
+            return value
+    return None
+
+
+def _fetch_quote(symbol: str) -> dict:
+    """Return a minimal quote dict for *symbol* using yfinance fast_info."""
+    try:
+        from tradingagents.dataflows.providers.yfinance_runtime import yf  # noqa: PLC0415
+
+        ticker = yf.Ticker(symbol)
+        info = ticker.fast_info
+
+        # fast_info attributes vary by symbol/exchange; fall back gracefully.
+        previous_close = _fast_info_value(info, "previous_close", "regularMarketPreviousClose")
+        last_price = _fast_info_value(info, "last_price", "regularMarketPrice")
+        volume = _as_float(_fast_info_value(info, "last_volume", "regularMarketVolume", "volume"))
+
+        if previous_close and last_price and previous_close != 0:
+            raw_chg = (last_price - previous_close) / previous_close * 100
+            sign = "+" if raw_chg >= 0 else ""
+            chg_str = f"{sign}{raw_chg:.2f}%"
+            pos = raw_chg >= 0
+        else:
+            chg_str = "N/A"
+            pos = True
+
+        return {
+            "sym": symbol,
+            "chg": chg_str,
+            "pos": pos,
+            "price": round(last_price, 2) if last_price else None,
+            "volume": volume,
+            "error": False,
+        }
+
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Failed to fetch quote for %s: %s", symbol, exc)
+        return {
+            "sym": symbol,
+            "chg": "N/A",
+            "pos": True,
+            "price": None,
+            "volume": None,
+            "error": True,
+        }
 
 
 def _series_values(frame: Any, column_name: str) -> list[float]:

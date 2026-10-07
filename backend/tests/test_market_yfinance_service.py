@@ -328,3 +328,52 @@ def test_fallback_marks_partial_when_only_price_found(monkeypatch, fresh_breaker
     monkeypatch.setattr(service, "_build_stock_overview_from_alpha_vantage", lambda s: None)
 
     assert service.build_stock_overview_with_fallback("AAPL")["data_quality"] == "partial"
+
+
+# ── Phase 5: quote-lite + fundamentals TTL ────────────────────────────────────
+
+
+def test_get_quote_lite_cached_uses_short_ttl_cache(monkeypatch):
+    service.market_cache.clear()
+    calls = {"n": 0}
+
+    def fake_fetch_quote(symbol):
+        calls["n"] += 1
+        return {"sym": symbol, "price": 100.0 + calls["n"], "error": False}
+
+    monkeypatch.setattr(service, "_fetch_quote", fake_fetch_quote)
+
+    first = service.get_quote_lite_cached("AAPL")
+    second = service.get_quote_lite_cached("AAPL")
+
+    assert first == second
+    assert calls["n"] == 1
+    assert service.QUOTE_LITE_TTL_SECONDS < 30
+
+
+def test_fundamentals_use_long_ttl_and_fundamentals_cache_key(monkeypatch):
+    service.market_cache.clear()
+    monkeypatch.setattr(
+        service,
+        "build_stock_overview_with_fallback",
+        lambda s: {"ticker": s, "price": 1.0, "name": "X", "data_quality": "complete"},
+    )
+
+    service.get_stock_overview("ZZZ")
+
+    ttl = service.market_cache._items["fundamentals:ZZZ"][1]
+    assert ttl == service.FUNDAMENTALS_TTL_SECONDS == 900
+
+
+def test_degraded_fundamentals_are_cached_briefly_not_for_fifteen_minutes(monkeypatch):
+    service.market_cache.clear()
+    monkeypatch.setattr(
+        service,
+        "build_stock_overview_with_fallback",
+        lambda s: {"ticker": s, "price": None, "name": None, "data_quality": "unavailable"},
+    )
+
+    service.get_stock_overview("ZZZ")
+
+    ttl = service.market_cache._items["fundamentals:ZZZ"][1]
+    assert ttl == service.DEGRADED_FUNDAMENTALS_TTL_SECONDS < service.FUNDAMENTALS_TTL_SECONDS
