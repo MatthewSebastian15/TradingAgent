@@ -129,3 +129,24 @@ def test_financials_route_forwards_and_validates(client, monkeypatch):
     assert seen == [("AAPL", "balance"), ("AAPL", "income")]
     assert client.get("/api/market/financials?ticker=AAPL&statement=cashflow").status_code == 422
     assert client.get("/api/market/financials?ticker=AAPL;DROP").status_code == 400
+
+
+def test_statements_are_fetched_concurrently(monkeypatch):
+    import threading
+
+    from tradingagents.dataflows.providers import y_finance
+
+    # All six fetches must be in flight at once, otherwise the barrier times out.
+    barrier = threading.Barrier(6, timeout=3)
+
+    def getter(symbol, freq):
+        barrier.wait()
+        return f"{symbol}:{freq}"
+
+    for name in ("get_income_statement", "get_balance_sheet", "get_cashflow"):
+        monkeypatch.setattr(y_finance, name, getter)
+
+    result = svc._fetch_statements("AAPL")
+
+    assert result["cashflow"] == {"quarterly": "AAPL:quarterly", "annual": "AAPL:annual"}
+    assert list(result) == ["income_statement", "balance_sheet", "cashflow"]

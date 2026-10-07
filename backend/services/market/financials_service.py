@@ -8,6 +8,7 @@ income and balance-sheet views.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Literal
 
 from tradingagents.dataflows.providers import y_finance
@@ -33,14 +34,22 @@ __all__ = ["market_cache", "get_financials_cached"]
 
 
 def _fetch_statements(symbol: str) -> dict[str, Any]:
-    return {
-        name: {"quarterly": getter(symbol, "quarterly"), "annual": getter(symbol, "annual")}
-        for name, getter in (
-            ("income_statement", y_finance.get_income_statement),
-            ("balance_sheet", y_finance.get_balance_sheet),
-            ("cashflow", y_finance.get_cashflow),
-        )
-    }
+    getters = (
+        ("income_statement", y_finance.get_income_statement),
+        ("balance_sheet", y_finance.get_balance_sheet),
+        ("cashflow", y_finance.get_cashflow),
+    )
+    # Six independent network round trips; run them side by side instead of one after another.
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {
+            (name, freq): pool.submit(getter, symbol, freq)
+            for name, getter in getters
+            for freq in ("quarterly", "annual")
+        }
+        return {
+            name: {freq: futures[(name, freq)].result() for freq in ("quarterly", "annual")}
+            for name, _ in getters
+        }
 
 
 def _build_financials(symbol: str) -> dict[str, Any]:
