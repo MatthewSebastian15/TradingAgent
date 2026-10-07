@@ -41,6 +41,19 @@ describe('FinancialsTab', () => {
     });
   });
 
+  it('hides a period column that has no value in any row', async () => {
+    getFinancials.mockResolvedValue({
+      ...income,
+      periods: [...income.periods, { key: 'FY26Q3', label: 'FY26Q3' }],
+      rows: income.rows.map((row) => ({ ...row, values: { ...row.values, FY26Q3: '-' } })),
+    });
+    render(<FinancialsTab ticker="AAPL" />);
+
+    expect(await screen.findByText('Revenue')).toBeTruthy();
+    expect(screen.getByText('FY25')).toBeTruthy();
+    expect(screen.queryByText('FY26Q3')).toBeNull();
+  });
+
   it('refetches when switching to the balance sheet', async () => {
     getFinancials.mockResolvedValueOnce(income).mockResolvedValueOnce({
       ...income,

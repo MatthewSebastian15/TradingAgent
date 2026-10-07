@@ -344,6 +344,21 @@ describe('Research page', () => {
       expect(screen.getByText('Apple Inc.')).toBeTruthy();
     });
 
+    it('keeps a visited tab mounted so returning to it does not refetch', async () => {
+      const fetchSpy = stubFetch();
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+      await screen.findByText('NO CHART DATA');
+
+      fireEvent.click(screen.getByRole('button', { name: 'FINANCIALS' }));
+      await screen.findByText('Revenue');
+      fireEvent.click(screen.getByRole('button', { name: /OVERVIEW/ }));
+      fireEvent.click(screen.getByRole('button', { name: 'FINANCIALS' }));
+
+      expect(screen.getByText('Revenue')).toBeTruthy();
+      expect(callsTo(fetchSpy, '/market/financials')).toBe(1);
+    });
+
     it('marks the active tab and enables all four', () => {
       stubFetch();
       render(<Research />);

@@ -83,6 +83,12 @@ function recommendationColor(rec) {
 
 const DETAIL_TABS = ['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS'];
 
+const LAZY_TABS = [
+  { name: 'FINANCIALS', Tab: FinancialsTab },
+  { name: 'TECHNICALS', Tab: TechnicalsTab },
+  { name: 'NEWS', Tab: NewsTab },
+];
+
 function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, actions = null }) {
   const [descExpanded, setDescExpanded] = useState(false);
   const price = data?.price;
@@ -898,6 +904,8 @@ export default function Research() {
   const [autoCollapsed, setAutoCollapsed] = useState(false);
   const [activeRange, setActiveRange] = useState('1Y');
   const [activeTab, setActiveTab] = useState('OVERVIEW');
+  const [visitedTabs, setVisitedTabs] = useState([]);
+  if (!visitedTabs.includes(activeTab)) setVisitedTabs([...visitedTabs, activeTab]);
   const [ohlcvData, setOhlcvData] = useState(null);
   const [ohlcvLoading, setOhlcvLoading] = useState(false);
 
@@ -945,6 +953,7 @@ export default function Research() {
     // Keep exchange/name so the sidebar can show "TICKER-EXCHANGE".
     saveRecentTicker({ ...item, symbol: sym });
     setActiveTicker(sym);
+    setVisitedTabs([]); // hidden tabs belong to the previous ticker
   }, []);
 
   // Auto-collapse sidebar once, the first time research content loads.
@@ -1127,9 +1136,12 @@ export default function Research() {
                   </div>
                 </>
               )}
-              {activeTab === 'FINANCIALS' && <FinancialsTab ticker={activeTicker} />}
-              {activeTab === 'TECHNICALS' && <TechnicalsTab ticker={activeTicker} />}
-              {activeTab === 'NEWS' && <NewsTab ticker={activeTicker} />}
+              {/* Visited tabs stay mounted (hidden) so switching back keeps their state. */}
+              {LAZY_TABS.filter((tab) => visitedTabs.includes(tab.name)).map(({ name, Tab }) => (
+                <div key={name} hidden={activeTab !== name}>
+                  <Tab ticker={activeTicker} />
+                </div>
+              ))}
             </>
           )}
         </main>

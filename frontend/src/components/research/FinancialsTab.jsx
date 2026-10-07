@@ -14,8 +14,11 @@ export default function FinancialsTab({ ticker }) {
     [ticker, statement]
   );
   const { data, loading, error } = useResearchData(load);
-  const periods = data?.periods || [];
   const rows = data?.rows || [];
+  // A period no row has a value for (e.g. a not-yet-reported quarter) is just an empty column.
+  const periods = (data?.periods || []).filter((p) =>
+    rows.some((row) => (row.values?.[p.key] ?? '-') !== '-')
+  );
 
   return (
     <SectionCard title="FINANCIALS">
