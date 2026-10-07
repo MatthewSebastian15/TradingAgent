@@ -317,7 +317,7 @@ def test_market_ohlcv_uses_daily_when_detail_intervals_empty(client, monkeypatch
 
     assert response.status_code == 200
     payload = response.json()
-    assert calls == ["5m", "15m", "30m", "60m", "1d"]
+    assert sorted(calls) == ["15m", "1d", "30m", "5m", "60m"]
     assert payload["interval"] == "1d"
     assert payload["fallback_to_daily"] is True
     assert payload["points"][-1]["close"] == 22

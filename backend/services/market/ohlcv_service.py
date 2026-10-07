@@ -7,7 +7,10 @@ service for cell coercion.
 
 from __future__ import annotations
 
+import logging
+import threading
 from collections import OrderedDict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 from time import monotonic
 from typing import Any
@@ -15,7 +18,10 @@ from typing import Any
 from core.errors import BadRequestError
 from services.market.yfinance_service import _as_float
 
+logger = logging.getLogger(__name__)
+
 _MAX_CACHE_ENTRIES = 500
+_OHLCV_FETCH_WORKERS = 4
 _OHLCV_CACHE_TTL_SECONDS = 60.0
 _OHLCV_CACHE: OrderedDict[tuple[str, str, str], tuple[float, dict[str, Any]]] = OrderedDict()
 _OHLCV_RANGE_DAYS = {"1W": 7, "1M": 31, "3M": 92, "6M": 183, "1Y": 365, "2Y": 730, "5Y": 1825}
@@ -259,55 +265,99 @@ def _build_ohlcv_payload(
     }
 
 
+# ponytail: per-key locks grow with distinct (symbol, range, date) keys; add a bounded
+# LRU only if key cardinality ever becomes a memory problem.
+_refresh_locks: dict[tuple[str, str, str | None], threading.Lock] = {}
+_locks_guard = threading.Lock()
+
+
+def _get_ohlcv_lock(key: tuple[str, str, str | None]) -> threading.Lock:
+    with _locks_guard:
+        return _refresh_locks.setdefault(key, threading.Lock())
+
+
+def _fetch_intervals_parallel(
+    symbol: str, start_dt: datetime, end_dt: datetime, intervals: list[str]
+) -> tuple[dict[str, list[dict[str, Any]]], Exception | None]:
+    """Download *intervals* concurrently. Returns interval -> normalized rows (only
+    for intervals that did not raise) and the last exception seen."""
+    results: dict[str, list[dict[str, Any]]] = {}
+    last_error: Exception | None = None
+    with ThreadPoolExecutor(max_workers=min(_OHLCV_FETCH_WORKERS, len(intervals))) as pool:
+        futures = {
+            pool.submit(_download_ohlcv, symbol, start_dt, end_dt, interval): interval
+            for interval in intervals
+        }
+        for future in as_completed(futures):
+            interval = futures[future]
+            try:
+                results[interval] = _normalize_ohlcv_rows(
+                    future.result(), start_dt, end_dt, interval
+                )
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                logger.debug("OHLCV fetch failed for %s %s: %s", symbol, interval, exc)
+    return results, last_error
+
+
+def _pick_interval(
+    intervals: list[str], rows_by_interval: dict[str, list[dict[str, Any]]]
+) -> tuple[str, str | None, list[dict[str, Any]]]:
+    """Walk intervals finest-first. Returns ("need", ...) when an interval has no
+    data yet, ("hit", interval, rows) for the first usable one, else ("none", ...)."""
+    for interval in intervals:
+        if interval not in rows_by_interval:
+            return "need", None, []
+        rows = rows_by_interval[interval]
+        if not rows or (len(rows) < 2 and interval != intervals[-1]):
+            continue
+        return "hit", interval, rows
+    return "none", None, []
+
+
 def fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> dict[str, Any]:
     end_dt = parse_ohlcv_trade_date(trade_date)
     start_dt = _ohlcv_start_date(end_dt, range_key)
     intervals = _ohlcv_intervals(range_key)
+    daily_fallback = intervals[-1] == "1d" and intervals[0] != "1d"
+    rows_by_interval: dict[str, list[dict[str, Any]]] = {}
     last_error: Exception | None = None
 
-    for interval in intervals:
+    def load_cached() -> None:
         now = monotonic()
-        cache_hit, cached_rows = _cached_ohlcv_rows(symbol, start_dt, end_dt, interval, now)
-        if cache_hit:
-            if cached_rows or interval == intervals[-1]:
-                return _build_ohlcv_payload(
-                    symbol=symbol,
-                    range_key=range_key,
-                    interval=interval,
-                    requested_start_dt=start_dt,
-                    requested_end_dt=end_dt,
-                    rows=cached_rows,
-                    fallback_to_daily=interval == "1d" and intervals[0] != "1d",
-                )
-            continue
+        for interval in intervals:
+            if interval not in rows_by_interval:
+                hit, rows = _cached_ohlcv_rows(symbol, start_dt, end_dt, interval, now)
+                if hit:
+                    rows_by_interval[interval] = rows
 
-        try:
-            rows = _normalize_ohlcv_rows(
-                _download_ohlcv(symbol, start_dt, end_dt, interval), start_dt, end_dt, interval
-            )
-            _cache_ohlcv_rows(symbol, start_dt, end_dt, interval, rows)
-            if not rows:
-                continue
-            if len(rows) < 2 and interval != intervals[-1]:
-                continue
-            return _build_ohlcv_payload(
-                symbol=symbol,
-                range_key=range_key,
-                interval=interval,
-                requested_start_dt=start_dt,
-                requested_end_dt=end_dt,
-                rows=rows,
-                fallback_to_daily=interval == "1d" and intervals[0] != "1d",
-            )
-        except Exception as exc:  # noqa: BLE001
-            last_error = exc
-            import logging  # noqa: PLC0415
+    load_cached()
+    state, interval, rows = _pick_interval(intervals, rows_by_interval)
+    if state == "need":
+        with _get_ohlcv_lock((symbol, range_key, trade_date)):
+            load_cached()  # a concurrent caller may have filled the cache while we waited
+            state, interval, rows = _pick_interval(intervals, rows_by_interval)
+            if state == "need":
+                missing = [i for i in intervals if i not in rows_by_interval]
+                results, last_error = _fetch_intervals_parallel(symbol, start_dt, end_dt, missing)
+                for name, fetched in results.items():
+                    _cache_ohlcv_rows(symbol, start_dt, end_dt, name, fetched)
+                    rows_by_interval[name] = fetched
+                for name in missing:  # failed intervals are skipped, not cached
+                    rows_by_interval.setdefault(name, [])
+                state, interval, rows = _pick_interval(intervals, rows_by_interval)
 
-            logging.getLogger(__name__).debug(
-                "OHLCV fetch failed for %s %s %s: %s", symbol, range_key, interval, exc
-            )
+    if state == "hit":
+        return _build_ohlcv_payload(
+            symbol=symbol,
+            range_key=range_key,
+            interval=interval,
+            requested_start_dt=start_dt,
+            requested_end_dt=end_dt,
+            rows=rows,
+            fallback_to_daily=interval == "1d" and intervals[0] != "1d",
+        )
 
-    warning = str(last_error or "No OHLCV candles returned for the selected range.")
     return _build_ohlcv_payload(
         symbol=symbol,
         range_key=range_key,
@@ -315,6 +365,6 @@ def fetch_ohlcv_range(symbol: str, range_key: str, trade_date: str | None) -> di
         requested_start_dt=start_dt,
         requested_end_dt=end_dt,
         rows=[],
-        fallback_to_daily=intervals[-1] == "1d" and intervals[0] != "1d",
-        warning=warning,
+        fallback_to_daily=daily_fallback,
+        warning=str(last_error or "No OHLCV candles returned for the selected range."),
     )
