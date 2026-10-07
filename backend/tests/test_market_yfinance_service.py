@@ -412,3 +412,35 @@ def test_build_stock_overview_dividend_yield_is_a_fraction(monkeypatch):
     assert service.build_stock_overview("AAPL")["dividend_yield"] == 0.005
     info.pop("dividendRate")
     assert service.build_stock_overview("AAPL")["dividend_yield"] is None
+
+
+def test_fallback_skips_vendors_that_do_not_cover_the_market(monkeypatch, fresh_breakers):
+    called = []
+    monkeypatch.setattr(service, "build_stock_overview", lambda s: {"ticker": s, "price": None})
+    monkeypatch.setattr(
+        service, "_build_stock_overview_from_finnhub", lambda s: called.append("finnhub") or {}
+    )
+    monkeypatch.setattr(
+        service, "_build_stock_overview_from_alpha_vantage", lambda s: called.append("av") or {}
+    )
+
+    service.build_stock_overview_with_fallback("BBCA.JK")  # alpha_vantage has no IDX coverage
+    assert called == ["finnhub"]
+    called.clear()
+    service.build_stock_overview_with_fallback("BTC-USD")  # neither covers crypto
+    assert called == []
+
+
+def test_alpha_vantage_adapter_spends_one_call_when_symbol_has_no_quote(monkeypatch):
+    import tradingagents.dataflows.providers.alpha_vantage_common as av
+
+    calls = []
+
+    def fake_request(function_name, params):
+        calls.append(function_name)
+        return {}
+
+    monkeypatch.setattr(av, "_make_api_request", fake_request)
+
+    assert service._build_stock_overview_from_alpha_vantage("NOPE") == {}
+    assert calls == ["GLOBAL_QUOTE"]

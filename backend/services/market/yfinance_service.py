@@ -11,6 +11,8 @@ from hashlib import sha256
 from typing import Any
 
 import pandas as pd
+from tradingagents.dataflows.providers.source_priority import market_from_symbol
+from tradingagents.dataflows.providers.vendor_capabilities import supports_vendor
 from tradingagents.utils.resilience import CircuitOpenError, get_circuit
 
 from services.market.cache import market_cache
@@ -379,8 +381,10 @@ def _build_stock_overview_from_alpha_vantage(symbol: str) -> dict[str, Any]:
                 return {}
         return raw if isinstance(raw, dict) else {}
 
-    overview = request("OVERVIEW")
     quote = request("GLOBAL_QUOTE").get("Global Quote") or {}
+    if not quote:
+        return {}  # unknown symbol: skip OVERVIEW, the free tier is ~25 calls/day
+    overview = request("OVERVIEW")
     fields = {
         "price": _as_float(quote.get("05. price")),
         "prev_close": _as_float(quote.get("08. previous close")),
@@ -427,10 +431,13 @@ def build_stock_overview_with_fallback(symbol: str) -> dict[str, Any]:
     if overview and _has_required_fields(overview):
         return _with_data_quality(overview)
 
+    market = market_from_symbol(symbol)
     for vendor, fetch in (
         ("finnhub", lambda: _build_stock_overview_from_finnhub(symbol)),
         ("alpha_vantage", lambda: _build_stock_overview_from_alpha_vantage(symbol)),
     ):
+        if not supports_vendor(vendor, market, "quote"):
+            continue  # don't burn free-tier quota on markets the vendor doesn't cover
         fallback = _try_vendor(vendor, fetch)
         if fallback:
             overview = _merge_overview(overview or {"ticker": symbol}, fallback)
