@@ -370,9 +370,24 @@ describe('Research page', () => {
         const tab = screen.getByRole('button', { name: new RegExp(name) });
         expect(tab.disabled).toBe(false);
       }
-      expect(screen.getByRole('button', { name: /OVERVIEW/ }).getAttribute('aria-current')).toBe(
+      expect(screen.getByRole('button', { name: /OVERVIEW/ }).getAttribute('aria-pressed')).toBe(
         'true'
       );
+      expect(screen.getByRole('button', { name: 'FINANCIALS' }).getAttribute('aria-pressed')).toBe(
+        'false'
+      );
+    });
+
+    it('gives every tab an explicit focus ring', () => {
+      stubFetch();
+      render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      for (const name of ['OVERVIEW', 'FINANCIALS', 'TECHNICALS', 'NEWS']) {
+        expect(screen.getByRole('button', { name: new RegExp(name) }).className).toMatch(
+          /focus-visible:outline-bloomberg-orange/
+        );
+      }
     });
   });
 

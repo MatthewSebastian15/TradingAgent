@@ -178,8 +178,8 @@ function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, 
               key={tab}
               type="button"
               onClick={() => onTabChange(tab)}
-              aria-current={activeTab === tab ? 'true' : undefined}
-              className={`py-2 font-mono text-[11px] border-b-2 transition-colors ${
+              aria-pressed={activeTab === tab}
+              className={`py-2 font-mono text-[11px] border-b-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-bloomberg-orange ${
                 activeTab === tab
                   ? 'border-bloomberg-orange text-bloomberg-orange'
                   : 'border-transparent text-bloomberg-muted hover:text-bloomberg-white'
