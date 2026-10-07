@@ -132,6 +132,18 @@ export async function getStockOverview(ticker, { signal, forceRefresh = false } 
   return parseMarketResponse(response);
 }
 
+export async function getQuoteLite(ticker, { signal } = {}) {
+  const response = await fetch(
+    buildApiUrl(`/market/quote-lite?ticker=${encodeURIComponent(ticker)}`),
+    {
+      headers: await buildAuthHeaders(),
+      credentials: 'include',
+      signal,
+    }
+  );
+  return parseMarketResponse(response);
+}
+
 export async function getMarketMovers({ country, exchange, limit }, { signal } = {}) {
   const params = new URLSearchParams({
     country,

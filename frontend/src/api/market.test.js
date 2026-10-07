@@ -14,6 +14,7 @@ import {
   getMarketPresets,
   getMarketQuotes,
   getMarketSparklines,
+  getQuoteLite,
   getStockOverview,
   searchMarketTickers,
   validateMarketSymbol,
@@ -72,6 +73,14 @@ describe('market API getters', () => {
     expect(globalThis.fetch.mock.calls[0][0]).toBe(
       '/api/market/stock-overview?ticker=AAPL&force_refresh=true'
     );
+  });
+
+  it('getQuoteLite encodes the ticker and rejects non-ok responses', async () => {
+    await getQuoteLite('^GSPC');
+    expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/market/quote-lite?ticker=%5EGSPC');
+
+    globalThis.fetch.mockResolvedValueOnce({ ok: false, status: 502 });
+    await expect(getQuoteLite('AAPL')).rejects.toThrow('HTTP 502');
   });
 
   it('getMarketMovers builds country/exchange/limit params', async () => {

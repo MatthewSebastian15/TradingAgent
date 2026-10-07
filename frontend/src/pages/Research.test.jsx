@@ -4,6 +4,7 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import Research from './Research';
+import { useQuoteLite } from '../hooks/useQuoteLite';
 import { useStockOverview } from '../hooks/useStockOverview';
 
 vi.mock('../components/research/ResearchCommandBar', () => {
@@ -39,6 +40,9 @@ vi.mock('../hooks/useStockOverview', () => ({
         }
       : { loading: false, error: null, data: null }
   ),
+}));
+vi.mock('../hooks/useQuoteLite', () => ({
+  useQuoteLite: vi.fn(() => ({ quote: null, updatedAt: null })),
 }));
 vi.mock('../utils/recentTickers', () => ({
   saveRecentTicker: vi.fn(),
@@ -194,5 +198,38 @@ describe('Research page', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     expect(screen.getByText('NO CHART DATA')).toBeTruthy();
+  });
+
+  describe('live quote merge', () => {
+    const original = useQuoteLite.getMockImplementation();
+    afterEach(() => useQuoteLite.mockImplementation(original));
+
+    it('shows the polled price/change over the cached fundamentals snapshot', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      useQuoteLite.mockImplementation(() => ({
+        quote: { sym: 'AAPL', price: 220, volume: 5, error: false },
+        updatedAt: 1,
+      }));
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      // prev_close 200 from the snapshot, live price 220: +20.00 (+10.00%).
+      expect(screen.getByText(/\+20\.00 \(\+10\.00%\)/)).toBeTruthy();
+      expect(screen.queryByText(/\+10\.50 \(\+5\.25%\)/)).toBeNull();
+    });
+
+    it('falls back to the snapshot price when the quote has no price', () => {
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      useQuoteLite.mockImplementation(() => ({
+        quote: { sym: 'AAPL', price: null, volume: null, error: true },
+        updatedAt: null,
+      }));
+      render(<Research />);
+
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(screen.getByText(/\+10\.50 \(\+5\.25%\)/)).toBeTruthy();
+    });
   });
 });

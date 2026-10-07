@@ -13,6 +13,7 @@ import {
   normalizePricePoints,
   TEXT_COLOR,
 } from '../components/results/tabs/priceChartUtils';
+import { useQuoteLite } from '../hooks/useQuoteLite';
 import { useStockOverview } from '../hooks/useStockOverview';
 import { buildApiUrl, buildAuthHeaders } from '../utils/api';
 import { signClass as baseSignClass } from '../utils/formatting';
@@ -846,6 +847,14 @@ export default function Research() {
   const [ohlcvLoading, setOhlcvLoading] = useState(false);
 
   const { data, loading, error, retry } = useStockOverview(activeTicker);
+  const { quote } = useQuoteLite(activeTicker);
+
+  // Live price/volume over the slow, long-cached fundamentals snapshot. prev_close stays
+  // from the snapshot (constant intraday) so the change is always computed consistently.
+  const displayData = useMemo(() => {
+    if (!data || !quote) return data;
+    return { ...data, price: quote.price ?? data.price, volume: quote.volume ?? data.volume };
+  }, [data, quote]);
 
   const handleSelect = useCallback((selection) => {
     const item = typeof selection === 'string' ? { symbol: selection } : selection || {};
@@ -956,7 +965,7 @@ export default function Research() {
 
           {activeTicker && (
             <>
-              <StockHeader data={data} loading={loading} />
+              <StockHeader data={displayData} loading={loading} />
 
               {error && <LoadFailure message={`FAILED TO LOAD: ${error}`} onRetry={retry} />}
               {!error && data?.data_quality === 'unavailable' && (
@@ -979,7 +988,7 @@ export default function Research() {
                   />
                 </div>
                 <div className="space-y-3">
-                  <TradingDataCard data={data} loading={loading} />
+                  <TradingDataCard data={displayData} loading={loading} />
                   <QuickStatsCard data={data} loading={loading} />
                   <Range52WCard data={data} loading={loading} />
                 </div>
