@@ -441,6 +441,44 @@ describe('Research page', () => {
     });
   });
 
+  describe('loading skeletons', () => {
+    const original = useStockOverview.getMockImplementation();
+    afterEach(() => useStockOverview.mockImplementation(original));
+
+    const fullData = {
+      name: 'Apple Inc.',
+      price: 110,
+      prev_close: 100,
+      description: 'x'.repeat(50),
+    };
+
+    it('marks loading cards aria-busy and reserves every content slot', () => {
+      useStockOverview.mockImplementation(() => ({ loading: true, error: null, data: null }));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      const { container } = render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      expect(container.querySelectorAll('[aria-busy="true"]').length).toBeGreaterThan(0);
+      expect(container.querySelectorAll('[data-skeleton-slot="stat"]').length).toBe(2);
+      expect(container.querySelectorAll('[data-skeleton-slot="description"]').length).toBe(1);
+    });
+
+    it('matches the skeleton slots one-to-one with the loaded content slots', async () => {
+      useStockOverview.mockImplementation((ticker) => ({
+        loading: false,
+        error: null,
+        data: ticker ? fullData : null,
+      }));
+      vi.spyOn(globalThis, 'fetch').mockResolvedValue({ json: async () => ({ points: [] }) });
+      const { container } = render(<Research />);
+      fireEvent.click(screen.getByText('submit-ticker'));
+
+      await screen.findByText('NO CHART DATA'); // OHLCV fetch settled
+      expect(container.querySelectorAll('[data-content-slot="stat"]').length).toBe(2);
+      expect(container.querySelectorAll('[aria-busy="true"]').length).toBe(0);
+    });
+  });
+
   describe('MA overlay', () => {
     const original = useStockOverview.getMockImplementation();
     afterEach(() => useStockOverview.mockImplementation(original));

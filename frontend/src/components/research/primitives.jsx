@@ -1,8 +1,16 @@
 import PropTypes from 'prop-types';
 
-export function SectionCard({ title, children, className = '' }) {
+export function Skeleton({ className = '' }) {
+  return (
+    <div className={`animate-pulse bg-bloomberg-border rounded ${className}`} aria-hidden="true" />
+  );
+}
+Skeleton.propTypes = { className: PropTypes.string };
+
+export function SectionCard({ title, children, className = '', busy = false }) {
   return (
     <div
+      aria-busy={busy || undefined}
       className={`border border-bloomberg-border bg-bloomberg-card rounded-sm overflow-hidden ${className}`}
     >
       {title && (
@@ -20,6 +28,7 @@ SectionCard.propTypes = {
   title: PropTypes.string,
   children: PropTypes.node,
   className: PropTypes.string,
+  busy: PropTypes.bool,
 };
 
 export function DataRow({ label, value, valueClass = 'text-bloomberg-white' }) {
@@ -39,8 +48,8 @@ DataRow.propTypes = {
 export function SkeletonRow() {
   return (
     <div className="flex justify-between items-center px-3 py-[5px] border-b border-bloomberg-border last:border-0">
-      <div className="animate-pulse bg-bloomberg-border rounded h-3 w-20" />
-      <div className="animate-pulse bg-bloomberg-border rounded h-3 w-16" />
+      <Skeleton className="h-3 w-20" />
+      <Skeleton className="h-3 w-16" />
     </div>
   );
 }

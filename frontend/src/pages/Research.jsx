@@ -13,6 +13,7 @@ import {
   MarginBar,
   RangeDot,
   SectionCard,
+  Skeleton,
   SkeletonRow,
 } from '../components/research/primitives';
 import ResearchActions from '../components/research/ResearchActions';
@@ -98,13 +99,22 @@ function StockHeader({ data, loading, updatedAt = null, activeTab, onTabChange, 
     change != null && prevClose && prevClose !== 0 ? (change / prevClose) * 100 : null;
 
   return (
-    <div className="border border-bloomberg-border bg-bloomberg-card rounded-sm">
+    <div
+      aria-busy={(loading && !data) || undefined}
+      className="border border-bloomberg-border bg-bloomberg-card rounded-sm"
+    >
       <div className="px-4 py-3 border-b border-bloomberg-border">
         {loading && !data ? (
-          <div className="flex gap-4 items-center">
-            <div className="animate-pulse bg-bloomberg-border rounded h-5 w-48" />
-            <div className="animate-pulse bg-bloomberg-border rounded h-7 w-28" />
-          </div>
+          <>
+            <div className="flex gap-4 items-center">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-7 w-28" />
+            </div>
+            <div data-skeleton-slot="description" className="mt-2 space-y-1.5">
+              <Skeleton className="h-3 w-full" />
+              <Skeleton className="h-3 w-4/5" />
+            </div>
+          </>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -392,7 +402,7 @@ function Range52WCard({ data, loading }) {
   const vsMa200 = price && ma200 ? ((price - ma200) / ma200) * 100 : null;
 
   return (
-    <SectionCard title="52W RANGE">
+    <SectionCard title="52W RANGE" busy={loading || !data}>
       {loading || !data ? (
         Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
@@ -438,7 +448,7 @@ function TradingDataCard({ data, loading }) {
       : null;
 
   return (
-    <SectionCard title="TRADING DATA">
+    <SectionCard title="TRADING DATA" busy={loading || !data}>
       {loading || !data
         ? Array.from({ length: 9 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -474,7 +484,7 @@ TradingDataCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
 function QuickStatsCard({ data, loading }) {
   return (
-    <SectionCard title="QUICK STATS">
+    <SectionCard title="QUICK STATS" busy={loading || !data}>
       {loading || !data
         ? Array.from({ length: 3 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -496,7 +506,7 @@ QuickStatsCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
 function ValuationCard({ data, loading }) {
   return (
-    <SectionCard title="VALUATION MULTIPLES">
+    <SectionCard title="VALUATION MULTIPLES" busy={loading || !data}>
       {loading || !data
         ? Array.from({ length: 9 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -522,6 +532,19 @@ function ValuationCard({ data, loading }) {
 }
 ValuationCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool };
 
+// Same box as the centered headline stat (big number + caption) the loaded cards render.
+function StatBlockSkeleton() {
+  return (
+    <div
+      data-skeleton-slot="stat"
+      className="px-3 py-4 border-b border-bloomberg-border text-center"
+    >
+      <Skeleton className="h-7 w-24 mx-auto" />
+      <Skeleton className="h-3 w-20 mx-auto mt-1.5" />
+    </div>
+  );
+}
+
 function AnalystConsensusCard({ data, loading }) {
   const price = data?.price;
   const tLow = data?.target_low;
@@ -533,12 +556,20 @@ function AnalystConsensusCard({ data, loading }) {
       : null;
 
   return (
-    <SectionCard title="ANALYST CONSENSUS">
+    <SectionCard title="ANALYST CONSENSUS" busy={loading || !data}>
       {loading || !data ? (
-        Array.from({ length: 7 }).map((_, i) => <SkeletonRow key={i} />)
+        <>
+          <StatBlockSkeleton />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
+        </>
       ) : (
         <>
-          <div className="px-3 py-4 border-b border-bloomberg-border text-center">
+          <div
+            data-content-slot="stat"
+            className="px-3 py-4 border-b border-bloomberg-border text-center"
+          >
             <div
               className={`font-mono text-xl font-bold ${recommendationColor(data.recommendation)}`}
             >
@@ -581,12 +612,20 @@ AnalystConsensusCard.propTypes = { data: PropTypes.object, loading: PropTypes.bo
 function DividendsCard({ data, loading }) {
   const yield_ = data?.dividend_yield;
   return (
-    <SectionCard title="DIVIDENDS & YIELD">
+    <SectionCard title="DIVIDENDS & YIELD" busy={loading || !data}>
       {loading || !data ? (
-        Array.from({ length: 4 }).map((_, i) => <SkeletonRow key={i} />)
+        <>
+          <StatBlockSkeleton />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
+        </>
       ) : (
         <>
-          <div className="px-3 py-4 border-b border-bloomberg-border text-center">
+          <div
+            data-content-slot="stat"
+            className="px-3 py-4 border-b border-bloomberg-border text-center"
+          >
             <div
               className={`font-mono text-xl font-bold ${Number.isFinite(yield_) && yield_ > 0 ? 'text-bloomberg-green' : 'text-bloomberg-muted'}`}
             >
@@ -615,7 +654,7 @@ function ProfitabilityCard({ data, loading }) {
     ['ROE', data?.roe],
   ];
   return (
-    <SectionCard title="PROFITABILITY">
+    <SectionCard title="PROFITABILITY" busy={loading || !data}>
       {loading || !data
         ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
         : metrics.map(([label, val]) => {
@@ -640,7 +679,7 @@ ProfitabilityCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool 
 
 function GrowthIncomeCard({ data, loading }) {
   return (
-    <SectionCard title="GROWTH & INCOME">
+    <SectionCard title="GROWTH & INCOME" busy={loading || !data}>
       {loading || !data ? (
         Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
@@ -691,7 +730,7 @@ GrowthIncomeCard.propTypes = { data: PropTypes.object, loading: PropTypes.bool }
 
 function BalanceSheetCard({ data, loading }) {
   return (
-    <SectionCard title="BALANCE SHEET">
+    <SectionCard title="BALANCE SHEET" busy={loading || !data}>
       {loading || !data
         ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
         : [
@@ -720,7 +759,7 @@ function SharesOwnershipCard({ data, loading }) {
   const publicPct = Math.max(0, 100 - insider - institution);
 
   return (
-    <SectionCard title="SHARES & OWNERSHIP">
+    <SectionCard title="SHARES & OWNERSHIP" busy={loading || !data}>
       {loading || !data ? (
         Array.from({ length: 5 }).map((_, i) => <SkeletonRow key={i} />)
       ) : (
@@ -769,7 +808,7 @@ SharesOwnershipCard.propTypes = { data: PropTypes.object, loading: PropTypes.boo
 
 function RiskAssessmentCard({ data, loading }) {
   return (
-    <SectionCard title="RISK ASSESSMENT">
+    <SectionCard title="RISK ASSESSMENT" busy={loading || !data}>
       {loading || !data
         ? Array.from({ length: 6 }).map((_, i) => <SkeletonRow key={i} />)
         : [
