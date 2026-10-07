@@ -27,7 +27,7 @@ const HEADERS = [
 export default function TrackedPositionsTable({ rows, onRemove }) {
   if (!rows.length) {
     return (
-      <div className="border border-dashed border-bloomberg-border bg-bloomberg-card px-4 py-10 text-center font-mono text-[11px] tracking-wider text-bloomberg-muted">
+      <div className="border border-dashed border-bloomberg-border bg-bloomberg-card px-4 py-10 text-center font-mono text-[11px] tracking-wider text-bloomberg-white/60">
         No tracked recommendations yet. Promote a signal from the panel on the right to start
         tracking.
       </div>

@@ -65,7 +65,11 @@ describe('HomeWatchlistSidebar', () => {
 
   it('shows an empty state with no tickers', () => {
     setup({ group: { items: [] } });
-    expect(screen.getByText(/No tickers yet/)).toBeInTheDocument();
+    for (const text of [/No tickers yet/, /No holdings yet/]) {
+      const msg = screen.getByText(text);
+      expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+      expect(msg.className).toMatch(/text-bloomberg-white/);
+    }
   });
 
   it('shows the error state', () => {

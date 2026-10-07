@@ -102,7 +102,7 @@ export default function HoldingsTable({ rows, totalValue, onAdd, onRemove, error
       )}
 
       {rows.length === 0 ? (
-        <div className="px-4 py-10 text-center font-mono text-[11px] tracking-wider text-bloomberg-muted">
+        <div className="px-4 py-10 text-center font-mono text-[11px] tracking-wider text-bloomberg-white/60">
           No holdings yet. Add a position above to track its live value and P/L.
         </div>
       ) : (

@@ -26,7 +26,7 @@ export default function HomePortfolioSection() {
         </h2>
       </div>
       {holdings.length === 0 ? (
-        <div className="px-2 py-3 text-[11px] text-bloomberg-muted">
+        <div className="px-2 py-3 text-[11px] text-bloomberg-white/60">
           No holdings yet. Add them on the Portfolio tab.
         </div>
       ) : (

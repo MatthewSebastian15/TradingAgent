@@ -66,7 +66,7 @@ export function FundamentalMetricChart({ financialHighlights, chartDefinition })
             </div>
           )}
         </div>
-        <div className="flex min-h-[292px] items-center justify-center px-4 py-8 font-mono text-xs uppercase tracking-wider text-bloomberg-muted">
+        <div className="flex min-h-[292px] items-center justify-center px-4 py-8 font-mono text-xs uppercase tracking-wider text-bloomberg-white/60">
           No fundamental data available
         </div>
       </div>

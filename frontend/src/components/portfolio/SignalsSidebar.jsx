@@ -32,7 +32,7 @@ export default function SignalsSidebar({ signals, trackedIds, trackingId, error,
 
       <div className="flex-1 overflow-y-auto">
         {signals.length === 0 ? (
-          <div className="px-2 py-6 text-[11px] text-bloomberg-muted">
+          <div className="px-2 py-6 text-[11px] text-bloomberg-white/60">
             No analyses yet. Run an analysis in AI Agent to generate signals.
           </div>
         ) : (

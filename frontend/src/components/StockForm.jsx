@@ -90,7 +90,7 @@ function WatchlistItems({ items, activeTicker, onSelect, disabled }) {
   if (items.length === 0) {
     return (
       <div className="py-2 text-center">
-        <span className="font-mono text-[9px] tracking-[0.12em] text-bloomberg-muted">
+        <span className="font-mono text-[9px] tracking-[0.12em] text-bloomberg-white/60">
           No tickers — add from Watchlist tab.
         </span>
       </div>

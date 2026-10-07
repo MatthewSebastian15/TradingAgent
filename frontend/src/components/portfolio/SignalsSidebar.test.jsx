@@ -33,7 +33,9 @@ describe('SignalsSidebar', () => {
   it('shows the empty message without signals', () => {
     renderSidebar({ signals: [] });
 
-    expect(screen.getByText(/No analyses yet/)).toBeTruthy();
+    const msg = screen.getByText(/No analyses yet/);
+    expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+    expect(msg.className).toMatch(/text-bloomberg-white/);
   });
 
   it('renders a signal row and fires onTrack', () => {

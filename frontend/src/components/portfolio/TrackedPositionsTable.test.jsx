@@ -27,7 +27,9 @@ describe('TrackedPositionsTable', () => {
   it('shows the empty state without rows', () => {
     render(<TrackedPositionsTable rows={[]} onRemove={vi.fn()} />);
 
-    expect(screen.getByText(/No tracked recommendations yet/)).toBeTruthy();
+    const msg = screen.getByText(/No tracked recommendations yet/);
+    expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+    expect(msg.className).toMatch(/text-bloomberg-white/);
   });
 
   it('renders a position with directional return and remove action', () => {

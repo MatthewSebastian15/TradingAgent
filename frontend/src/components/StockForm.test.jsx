@@ -392,4 +392,12 @@ describe('StockForm cleanup', () => {
 
     expect(screen.getByPlaceholderText(/search ticker symbol/i).value).toBe('');
   });
+
+  it('renders the empty watchlist hint in a readable colour', () => {
+    render(<StockForm {...callbacks()} />);
+
+    const msg = screen.getByText(/No tickers — add from Watchlist tab/);
+    expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+    expect(msg.className).toMatch(/text-bloomberg-white/);
+  });
 });

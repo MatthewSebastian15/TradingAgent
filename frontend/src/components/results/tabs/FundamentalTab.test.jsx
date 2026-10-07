@@ -72,6 +72,11 @@ describe('FundamentalTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
 
-    expect(screen.getAllByText('No fundamental data available').length).toBeGreaterThan(0);
+    const notices = screen.getAllByText('No fundamental data available');
+    expect(notices.length).toBeGreaterThan(0);
+    for (const msg of notices) {
+      expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+      expect(msg.className).toMatch(/text-bloomberg-white/);
+    }
   });
 });

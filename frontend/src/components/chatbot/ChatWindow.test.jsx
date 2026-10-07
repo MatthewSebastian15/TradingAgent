@@ -20,7 +20,9 @@ describe('ChatWindow', () => {
   it('shows the empty prompt and a disabled send button', () => {
     renderWindow();
 
-    expect(screen.getByText(/Ask about your news, market/)).toBeTruthy();
+    const msg = screen.getByText(/Ask about your news, market/);
+    expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+    expect(msg.className).toMatch(/text-bloomberg-white/);
     expect(screen.getByRole('button').disabled).toBe(true);
   });
 

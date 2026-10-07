@@ -26,7 +26,9 @@ describe('HoldingsTable', () => {
   it('shows the empty state without rows', () => {
     renderTable();
 
-    expect(screen.getByText(/No holdings yet/)).toBeTruthy();
+    const msg = screen.getByText(/No holdings yet/);
+    expect(msg.className).not.toMatch(/text-bloomberg-muted/);
+    expect(msg.className).toMatch(/text-bloomberg-white/);
     expect(screen.queryByRole('table')).toBeNull();
   });
 

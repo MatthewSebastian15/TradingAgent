@@ -242,11 +242,11 @@ export default function HomeWatchlistSidebar() {
         ) : showSkeleton ? (
           <Skeleton />
         ) : totalSymbols === 0 ? (
-          <div className="px-2 py-4 text-[11px] text-bloomberg-muted">
+          <div className="px-2 py-4 text-[11px] text-bloomberg-white/60">
             No tickers yet. Add them on the Watchlist tab.
           </div>
         ) : rows.length === 0 ? (
-          <div className="px-2 py-4 text-[11px] text-bloomberg-muted">No matches.</div>
+          <div className="px-2 py-4 text-[11px] text-bloomberg-white/60">No matches.</div>
         ) : (
           rows.map((row) => (
             <Row
