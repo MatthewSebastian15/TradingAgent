@@ -386,3 +386,23 @@ def test_market_overview_forwards_force_refresh_query(client, monkeypatch):
     assert response.status_code == 200
     assert calls == [{"symbols": ["SPY", "QQQ", "DIA"], "force_refresh": True}]
     assert response.json()["cache"]["force_refresh"] is True
+
+
+def test_stock_overview_forwards_force_refresh_query(client, monkeypatch):
+    captured = {}
+
+    def fake_get_stock_overview(symbol, *, force_refresh=False):
+        captured["symbol"] = symbol
+        captured["force_refresh"] = force_refresh
+        return {"ticker": symbol}
+
+    monkeypatch.setattr(market_routes, "get_stock_overview", fake_get_stock_overview)
+
+    response = client.get("/api/market/stock-overview?ticker=AAPL&force_refresh=true")
+
+    assert response.status_code == 200
+    assert captured == {"symbol": "AAPL", "force_refresh": True}
+
+
+def test_stock_overview_route_has_no_local_cache_dict():
+    assert not hasattr(market_routes, "_OVERVIEW_CACHE")

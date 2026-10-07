@@ -30,11 +30,11 @@ from services.market.ohlcv_service import (
 )
 from services.market.search_index import get_popular_tickers, search_local_tickers
 from services.market.yfinance_service import (
-    build_stock_overview,
     dedupe_symbols,
     get_market_movers,
     get_market_presets,
     get_overview_data,
+    get_stock_overview,
     normalize_market_symbol,
     validate_symbol,
 )
@@ -267,27 +267,15 @@ def _as_float(value: Any) -> float | None:
     return number if number == number else None
 
 
-_OVERVIEW_CACHE_TTL_SECONDS = 300.0
-_OVERVIEW_CACHE: OrderedDict[str, tuple[float, dict[str, Any]]] = OrderedDict()
-
-
 @router.get("/market/stock-overview", tags=["market"], response_model=StockOverviewResponse)
 async def get_stock_overview_data(
     request: Request,
     ticker: str = Query(..., min_length=1, description="Ticker symbol, e.g. BBCA.JK"),
+    force_refresh: bool = Query(default=False),
 ) -> dict[str, Any]:
     async with _market_data_limit(request):
         normalized = _normalize_quote_symbol(ticker)
-        cache_key = f"overview:{normalized}"
-        cached = _cache_get(_OVERVIEW_CACHE, cache_key)
-        if cached:
-            ts, payload = cached
-            if monotonic() - ts < _OVERVIEW_CACHE_TTL_SECONDS:
-                return payload
-
-    payload = await asyncio.to_thread(build_stock_overview, normalized)
-    _cache_set(_OVERVIEW_CACHE, cache_key, (monotonic(), payload))
-    return payload
+        return await asyncio.to_thread(get_stock_overview, normalized, force_refresh=force_refresh)
 
 
 def _fast_info_value(info: Any, *names: str) -> Any:
