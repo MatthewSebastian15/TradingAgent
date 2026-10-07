@@ -6,6 +6,7 @@ import asyncio
 import logging
 import re
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import datetime
 from time import monotonic
 from typing import Any, Literal
@@ -25,6 +26,11 @@ from core.schemas import (
 )
 from core.security.rate_limiter import RateLimitPolicy, limit_request
 from services.market.financials_service import get_financials_cached
+from services.market.history_service import (
+    get_analyst_history_cached,
+    get_dividend_history_cached,
+    get_growth_trend_cached,
+)
 from services.market.ohlcv_service import (
     OHLCV_RANGE_OPTIONS,
     fetch_ohlcv_range,
@@ -316,6 +322,35 @@ async def get_technicals_data(
     async with _market_data_limit(request):
         normalized = _normalize_quote_symbol(ticker)
         return await asyncio.to_thread(get_technicals_cached, normalized)
+
+
+async def _history_response(request: Request, ticker: str, getter: Callable[[str], dict]):
+    async with _market_data_limit(request):
+        return await asyncio.to_thread(getter, _normalize_quote_symbol(ticker))
+
+
+@router.get("/market/analyst-history", tags=["market"])
+async def get_analyst_history_data(
+    request: Request, ticker: str = Query(..., min_length=1)
+) -> dict[str, Any]:
+    """Monthly analyst rating distribution (strong buy .. strong sell), oldest first."""
+    return await _history_response(request, ticker, get_analyst_history_cached)
+
+
+@router.get("/market/growth-trend", tags=["market"])
+async def get_growth_trend_data(
+    request: Request, ticker: str = Query(..., min_length=1)
+) -> dict[str, Any]:
+    """Last quarters of revenue and net income, oldest first."""
+    return await _history_response(request, ticker, get_growth_trend_cached)
+
+
+@router.get("/market/dividend-history", tags=["market"])
+async def get_dividend_history_data(
+    request: Request, ticker: str = Query(..., min_length=1)
+) -> dict[str, Any]:
+    """Most recent dividend payments, oldest first."""
+    return await _history_response(request, ticker, get_dividend_history_cached)
 
 
 _QUOTE_FETCH_TIMEOUT_SECONDS = 12.0
