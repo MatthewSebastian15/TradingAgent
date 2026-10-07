@@ -211,6 +211,11 @@ def build_stock_overview(symbol: str) -> dict[str, Any]:
         else None
     )
 
+    # yfinance >= 1.x reports dividendYield in percent; the API contract is a fraction
+    # (like payout_ratio), so derive it from rate/price instead of guessing the unit.
+    div_rate = f("dividendRate")
+    dividend_yield = div_rate / price if div_rate and price else None
+
     return {
         "ticker": symbol,
         "name": info.get("longName") or info.get("shortName"),
@@ -269,8 +274,8 @@ def build_stock_overview(symbol: str) -> dict[str, Any]:
         "insider_pct": f("heldPercentInsiders"),
         "institution_pct": f("heldPercentInstitutions"),
         "short_ratio": f("shortRatio"),
-        "dividend_yield": f("dividendYield"),
-        "div_rate": f("dividendRate"),
+        "dividend_yield": dividend_yield,
+        "div_rate": div_rate,
         "payout_ratio": f("payoutRatio"),
         "ex_div_date": ex_div_str,
         "beta": f("beta"),
@@ -454,6 +459,12 @@ def swr_cached_with_degraded_ttl(
 def get_stock_overview(symbol: str, *, force_refresh: bool = False) -> dict[str, Any]:
     """SWR-cached wrapper around build_stock_overview_with_fallback. Concurrent
     requests for the same symbol coalesce into one vendor round trip via the per-key lock."""
+    if force_refresh:
+        from tradingagents.dataflows.providers.y_finance import (  # noqa: PLC0415
+            invalidate_ticker_info,
+        )
+
+        invalidate_ticker_info(symbol)
     return swr_cached_with_degraded_ttl(
         f"fundamentals:{symbol}",
         lambda: build_stock_overview_with_fallback(symbol),

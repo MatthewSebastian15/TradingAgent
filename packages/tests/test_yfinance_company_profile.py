@@ -199,3 +199,28 @@ def test_safe_company_profile_keeps_pipeline_running_on_vendor_error(monkeypatch
         "finnhub: provider down",
         "alpha_vantage: provider down",
     ]
+
+
+def test_ticker_info_refetches_after_ttl_and_on_invalidate(monkeypatch):
+    calls = []
+    clock = [1000.0]
+
+    def fake_ticker(_symbol):
+        calls.append(1)
+        return SimpleNamespace(info={"n": len(calls)})
+
+    monkeypatch.setattr(y_finance, "_get_ticker", fake_ticker)
+    monkeypatch.setattr(y_finance.time, "monotonic", lambda: clock[0])
+
+    assert y_finance._get_ticker_info("AAPL") == {"n": 1}
+    assert y_finance._get_ticker_info("AAPL") == {"n": 1}  # cached within TTL
+    clock[0] += y_finance._TICKER_INFO_TTL_SECONDS + 1
+    assert y_finance._get_ticker_info("AAPL") == {"n": 2}  # expired
+    y_finance.invalidate_ticker_info("AAPL")
+    assert y_finance._get_ticker_info("AAPL") == {"n": 3}  # explicitly dropped
+
+
+def test_invalidate_ticker_info_drops_memoized_ticker_object():
+    y_finance._ticker_cache["AAPL"] = object()
+    y_finance.invalidate_ticker_info("AAPL")
+    assert "AAPL" not in y_finance._ticker_cache

@@ -1,7 +1,7 @@
-import functools
 import logging
 import math
 import threading
+import time
 from collections import OrderedDict
 from datetime import datetime, timedelta
 from typing import Annotated, Any
@@ -128,11 +128,38 @@ def _get_ticker(symbol: str):
         return ticker_obj
 
 
-@functools.lru_cache(maxsize=32)
+_TICKER_INFO_TTL_SECONDS = 900.0
+_TICKER_INFO_MAX_ENTRIES = 32
+_ticker_info_cache: OrderedDict[str, tuple[float, dict]] = OrderedDict()
+_ticker_info_lock = threading.Lock()
+
+
 def _get_ticker_info(symbol: str) -> dict:
-    """Fetch and cache .info once per ticker to avoid duplicate HTTP round-trips."""
+    """Fetch .info once per ticker per TTL to avoid duplicate HTTP round-trips."""
+    now = time.monotonic()
+    with _ticker_info_lock:
+        hit = _ticker_info_cache.get(symbol)
+        if hit and now - hit[0] < _TICKER_INFO_TTL_SECONDS:
+            return hit[1]
     ticker_obj = _get_ticker(symbol)
-    return yf_retry(lambda: ticker_obj.info) or {}
+    info = yf_retry(lambda: ticker_obj.info) or {}
+    with _ticker_info_lock:
+        _ticker_info_cache[symbol] = (now, info)
+        _ticker_info_cache.move_to_end(symbol)
+        while len(_ticker_info_cache) > _TICKER_INFO_MAX_ENTRIES:
+            _ticker_info_cache.popitem(last=False)
+    return info
+
+
+def invalidate_ticker_info(symbol: str) -> None:
+    """Drop cached .info plus the yf.Ticker object, which memoizes .info itself."""
+    with _ticker_info_lock:
+        _ticker_info_cache.pop(symbol, None)
+    with _ticker_cache_lock:
+        _ticker_cache.pop(normalize_ticker(symbol), None)
+
+
+_get_ticker_info.cache_clear = _ticker_info_cache.clear  # type: ignore[attr-defined]
 
 
 def _currency_for_symbol(symbol: str) -> str:

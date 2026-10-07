@@ -377,3 +377,38 @@ def test_degraded_fundamentals_are_cached_briefly_not_for_fifteen_minutes(monkey
 
     ttl = service.market_cache._items["fundamentals:ZZZ"][1]
     assert ttl == service.DEGRADED_FUNDAMENTALS_TTL_SECONDS < service.FUNDAMENTALS_TTL_SECONDS
+
+
+def test_get_stock_overview_force_refresh_invalidates_engine_info_cache(monkeypatch):
+    from tradingagents.dataflows.providers import y_finance
+
+    service.market_cache.clear()
+    y_finance._get_ticker_info.cache_clear()
+    fetches = []
+
+    def fake_ticker(_symbol):
+        fetches.append(1)
+        return type("T", (), {"info": {"currentPrice": len(fetches)}})()
+
+    monkeypatch.setattr(y_finance, "_get_ticker", fake_ticker)
+    monkeypatch.setattr(service, "build_stock_overview_with_fallback", lambda s: {"ticker": s})
+
+    service.get_stock_overview("ZZZ")
+    y_finance._get_ticker_info("ZZZ")
+    y_finance._get_ticker_info("ZZZ")
+    assert len(fetches) == 1
+    service.get_stock_overview("ZZZ", force_refresh=True)
+    y_finance._get_ticker_info("ZZZ")
+    assert len(fetches) == 2
+    y_finance._get_ticker_info.cache_clear()
+
+
+def test_build_stock_overview_dividend_yield_is_a_fraction(monkeypatch):
+    from tradingagents.dataflows.providers import y_finance
+
+    info = {"currentPrice": 200.0, "dividendRate": 1.0, "dividendYield": 0.5}
+    monkeypatch.setattr(y_finance, "_get_ticker_info", lambda _s: info)
+
+    assert service.build_stock_overview("AAPL")["dividend_yield"] == 0.005
+    info.pop("dividendRate")
+    assert service.build_stock_overview("AAPL")["dividend_yield"] is None
