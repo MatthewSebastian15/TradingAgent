@@ -6,7 +6,7 @@ import { LAST_PRICE_COLOR } from '../priceChartUtils';
 import { sectionById } from './config';
 import { DASH } from './format';
 import { InfoTip } from './InfoTip';
-import { useQuantMode } from './mode';
+import { useQuantMode } from './modeContext';
 
 // --- tiny presentational pieces (no new deps, reuse chart color tokens) ----
 

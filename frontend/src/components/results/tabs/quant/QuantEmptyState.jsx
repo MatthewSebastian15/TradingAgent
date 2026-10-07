@@ -1,8 +1,6 @@
 import PropTypes from 'prop-types';
 
-import { SECTION_GROUPS, SECTIONS } from './config';
-
-export const QUICK_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'BBRI.JK', 'TLKM.JK', 'ASII.JK'];
+import { QUICK_TICKERS, SECTION_GROUPS, SECTIONS } from './config';
 
 const CHIP =
   'h-8 rounded-none border border-bloomberg-border px-3 font-mono text-[11px] tracking-wider text-bloomberg-white hover:border-bloomberg-orange hover:text-bloomberg-orange focus-visible:outline focus-visible:outline-1 focus-visible:outline-bloomberg-orange';

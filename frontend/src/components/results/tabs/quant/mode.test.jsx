@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import React, { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { ModeToggle, ProOnly, QuantModeProvider, useQuantMode } from './mode';
+import { ModeToggle, ProOnly, QuantModeProvider } from './mode';
+import { useQuantMode } from './modeContext';
 
 function Probe() {
   const { mode } = useQuantMode();

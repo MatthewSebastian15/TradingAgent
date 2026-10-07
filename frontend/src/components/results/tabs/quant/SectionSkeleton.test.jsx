@@ -3,7 +3,8 @@ import React from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { SECTIONS } from './config';
-import { SectionSkeleton, SKELETON_LAYOUTS } from './SectionSkeleton';
+import { SKELETON_LAYOUTS } from './config';
+import { SectionSkeleton } from './SectionSkeleton';
 
 describe('SectionSkeleton', () => {
   afterEach(() => cleanup());

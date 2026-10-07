@@ -20,7 +20,8 @@ import {
 } from './quant/config';
 import { regimeLabel } from './quant/format';
 import { dataStatus } from './quant/interpret';
-import { ModeToggle, QUANT_MODES, QuantModeProvider } from './quant/mode';
+import { ModeToggle, QuantModeProvider } from './quant/mode';
+import { QUANT_MODES } from './quant/modeContext';
 import { loadPreset, savePreset } from './quant/presets';
 import { BacktestSection } from './quant/sections/BacktestSection';
 import { ContextBar } from './quant/sections/ContextBar';

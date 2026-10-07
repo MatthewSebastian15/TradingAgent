@@ -1,12 +1,8 @@
 import PropTypes from 'prop-types';
-import { createContext, useContext, useMemo } from 'react';
+import { useMemo } from 'react';
 
+import { QUANT_MODES, QuantModeContext, useQuantMode } from './modeContext';
 import { SegmentedControl } from './SegmentedControl';
-
-export const QUANT_MODES = ['basic', 'pro'];
-
-// Default is Pro so any component rendered outside QuantPanel keeps showing everything.
-const QuantModeContext = createContext({ mode: 'pro', setMode: () => {} });
 
 export function QuantModeProvider({ mode, onModeChange, children }) {
   const value = useMemo(() => ({ mode, setMode: onModeChange }), [mode, onModeChange]);
@@ -18,10 +14,6 @@ QuantModeProvider.propTypes = {
   onModeChange: PropTypes.func.isRequired,
   children: PropTypes.node,
 };
-
-export function useQuantMode() {
-  return useContext(QuantModeContext);
-}
 
 // Renders children only in Pro mode (full tables, confidence intervals, formulas).
 export function ProOnly({ children, fallback = null }) {

@@ -100,3 +100,22 @@ export const STRATEGIES = [
   { id: 'momentum', label: 'Momentum' },
   { id: 'meanrev', label: 'Mean Reversion' },
 ];
+
+export const QUICK_TICKERS = ['AAPL', 'MSFT', 'NVDA', 'BBRI.JK', 'TLKM.JK', 'ASII.JK'];
+
+// Block order per section, matching the real section top-to-bottom so nothing jumps
+// when data arrives. Heights match MetricCard (~5.5rem), ChartFrame (240px + frame) and
+// a short DataTable.
+export const SKELETON_LAYOUTS = {
+  overview: ['text', 'cards8', 'chips'],
+  volatility: ['text', 'cards4', 'chart', 'table'],
+  risk: ['text', 'cards5', 'fields', 'table', 'chart'],
+  distribution: ['cards4', 'chart', 'chart'],
+  scenario: ['text', 'fields', 'table', 'chart'],
+  stochastic: ['fields', 'text', 'chart', 'table'],
+  backtest: ['text', 'fields', 'chart', 'table'],
+  sizing: ['text', 'table', 'fields'],
+  correlation: ['text', 'fields', 'table', 'chart'],
+  options: ['text', 'fields', 'table', 'chart'],
+  valuation: ['text', 'fields', 'cards6', 'table'],
+};

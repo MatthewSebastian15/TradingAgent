@@ -2,7 +2,8 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { QUICK_TICKERS, QuantEmptyState } from './QuantEmptyState';
+import { QUICK_TICKERS } from './config';
+import { QuantEmptyState } from './QuantEmptyState';
 
 describe('QuantEmptyState', () => {
   afterEach(() => cleanup());

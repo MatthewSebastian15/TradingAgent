@@ -26,7 +26,8 @@ import {
   significanceNote,
 } from '../format';
 import { CARD_GRID, FIELD_GRID } from '../layout';
-import { ProOnly, useQuantMode } from '../mode';
+import { ProOnly } from '../mode';
+import { useQuantMode } from '../modeContext';
 import { fmtMoney } from '../numberFormat';
 import { SegmentedControl } from '../SegmentedControl';
 import { CHART_COLORS } from '../viz/chartTheme';
