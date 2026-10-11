@@ -3,6 +3,9 @@ import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import Portfolio from './Portfolio';
+import { useHoldingsStore } from '../hooks/useHoldingsStore';
+import { usePortfolioStore } from '../hooks/usePortfolioStore';
+import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
 
 vi.mock('../api/market', () => ({
   getMarketQuotes: vi.fn(async () => ({ quotes: [] })),
@@ -43,7 +46,16 @@ vi.mock('../hooks/useWatchlistQuotes', () => ({
 }));
 
 describe('Portfolio page', () => {
-  afterEach(() => cleanup());
+  afterEach(() => {
+    cleanup();
+    usePortfolioStore.mockImplementation(() => ({
+      tracked: [],
+      trackedIds: new Set(),
+      track: vi.fn(),
+      untrack: vi.fn(),
+    }));
+    useHoldingsStore.mockImplementation(() => ({ holdings: [], add: vi.fn(), remove: vi.fn() }));
+  });
 
   it('renders the AI tracker tab with signals from history', async () => {
     render(<Portfolio />);
@@ -63,5 +75,27 @@ describe('Portfolio page', () => {
 
     expect(screen.getByText(/No holdings yet/)).toBeTruthy();
     expect(screen.queryByText('Signals')).toBeNull();
+  });
+
+  it('prices only the visible tab and never prices signal-only tickers', async () => {
+    usePortfolioStore.mockImplementation(() => ({
+      tracked: [{ id: 't1', ticker: 'aapl', decision: 'BUY', entry_price: 100 }],
+      trackedIds: new Set(['t1']),
+      track: vi.fn(),
+      untrack: vi.fn(),
+    }));
+    useHoldingsStore.mockImplementation(() => ({
+      holdings: [{ id: 'h1', ticker: 'bbca.jk', shares: 1, cost_basis: 1 }],
+      add: vi.fn(),
+      remove: vi.fn(),
+    }));
+
+    render(<Portfolio />);
+    // NVDA comes from the mocked history feed: it is a signal, not a tracked position.
+    await screen.findByText('NVDA');
+    expect(useWatchlistQuotes.mock.calls.at(-1)[0]).toEqual(['AAPL']);
+
+    fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
+    expect(useWatchlistQuotes.mock.calls.at(-1)[0]).toEqual(['BBCA.JK']);
   });
 });

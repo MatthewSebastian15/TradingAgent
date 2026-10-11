@@ -18,6 +18,7 @@ import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
 import { fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { summarizeHoldings } from '../utils/holdingsPerf';
 import { summarize } from '../utils/portfolioPerf';
+import { symbolsForTab } from '../utils/portfolioSymbols';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
 
 const HISTORY_KEY = 'ta_analysis_history';
@@ -78,14 +79,10 @@ export default function Portfolio() {
     };
   }, []);
 
-  const symbols = useMemo(() => {
-    const all = [
-      ...tracked.map((t) => t.ticker),
-      ...signals.map((s) => s.ticker),
-      ...holdings.map((h) => h.ticker),
-    ];
-    return Array.from(new Set(all.map(normalizeWatchlistSymbol).filter(Boolean)));
-  }, [tracked, signals, holdings]);
+  const symbols = useMemo(
+    () => symbolsForTab(tab, { tracked, holdings }),
+    [tab, tracked, holdings]
+  );
 
   const { quotesBySymbol, trendsBySymbol } = useWatchlistQuotes(symbols);
 
