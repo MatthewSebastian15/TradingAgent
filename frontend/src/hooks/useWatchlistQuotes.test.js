@@ -18,6 +18,12 @@ function mountQuotes(symbols) {
   });
 }
 
+function mountQuotesWithOptions(symbols, options) {
+  return renderHook((props) => useWatchlistQuotes(props.symbols, options), {
+    initialProps: { symbols },
+  });
+}
+
 describe('useWatchlistQuotes', () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -56,6 +62,24 @@ describe('useWatchlistQuotes', () => {
 
     await waitFor(() => expect(result.current.error).toBe('quotes down'));
     expect(result.current.loadingQuotes).toBe(false);
+    unmount();
+  });
+
+  it('skips sparkline requests entirely when trends are disabled', async () => {
+    getMarketQuotes.mockResolvedValue({ quotes: [{ sym: 'NOTREND', price: 5 }] });
+    getMarketSparklines.mockResolvedValue({ sparklines: { NOTREND: [1, 2, 3] } });
+
+    const { result, unmount } = mountQuotesWithOptions(['NOTREND'], { trends: false });
+
+    await waitFor(() =>
+      expect(result.current.quotesBySymbol.get('NOTREND')).toMatchObject({ price: 5 })
+    );
+    const sparklineCallsForSymbol = getMarketSparklines.mock.calls.filter(([batch]) =>
+      batch.includes('NOTREND')
+    );
+    expect(sparklineCallsForSymbol).toHaveLength(0);
+    expect(result.current.loadingTrends).toBe(false);
+    expect(result.current.trendsBySymbol.size).toBe(0);
     unmount();
   });
 });

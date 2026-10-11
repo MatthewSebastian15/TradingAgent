@@ -45,11 +45,13 @@ function readCachedTrends(symbols) {
   return nextMap;
 }
 
-export function useWatchlistQuotes(symbols) {
+export function useWatchlistQuotes(symbols, { trends = true } = {}) {
   const normalizedSymbols = useMemo(() => uniqueSymbols(symbols), [symbols]);
   const symbolKey = normalizedSymbols.join('|');
   const [quotesBySymbol, setQuotesBySymbol] = useState(() => readCachedQuotes(normalizedSymbols));
-  const [trendsBySymbol, setTrendsBySymbol] = useState(() => readCachedTrends(normalizedSymbols));
+  const [trendsBySymbol, setTrendsBySymbol] = useState(() =>
+    trends ? readCachedTrends(normalizedSymbols) : new Map()
+  );
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [error, setError] = useState('');
@@ -70,7 +72,7 @@ export function useWatchlistQuotes(symbols) {
     const controller = new AbortController();
     controllerRef.current = controller;
     setQuotesBySymbol(readCachedQuotes(normalizedSymbols));
-    setTrendsBySymbol(readCachedTrends(normalizedSymbols));
+    setTrendsBySymbol(trends ? readCachedTrends(normalizedSymbols) : new Map());
     setError('');
 
     setLoadingQuotes(true);
@@ -88,8 +90,10 @@ export function useWatchlistQuotes(symbols) {
         if (!controller.signal.aborted) setLoadingQuotes(false);
       });
 
-    const cachedTrends = readCachedTrends(normalizedSymbols);
-    const missingTrendSymbols = normalizedSymbols.filter((symbol) => !cachedTrends.has(symbol));
+    const cachedTrends = trends ? readCachedTrends(normalizedSymbols) : new Map();
+    const missingTrendSymbols = trends
+      ? normalizedSymbols.filter((symbol) => !cachedTrends.has(symbol))
+      : [];
 
     if (!missingTrendSymbols.length) {
       setTrendsBySymbol(cachedTrends);
@@ -122,7 +126,7 @@ export function useWatchlistQuotes(symbols) {
       .finally(() => {
         if (!controller.signal.aborted) setLoadingTrends(false);
       });
-  }, [normalizedSymbols]);
+  }, [normalizedSymbols, trends]);
 
   useEffect(() => {
     refresh();
