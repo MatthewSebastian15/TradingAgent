@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { chunk, fetchInBatches, QUOTE_BATCH_SIZE } from './marketBatch';
+import { chunk, fetchInBatches, QUOTE_BATCH_SIZE, withDeadline, withRetry } from './marketBatch';
 
 const symbolsOf = (count) => Array.from({ length: count }, (_, index) => `S${index}`);
 
@@ -91,5 +91,84 @@ describe('fetchInBatches', () => {
     await expect(fetchInBatches(symbolsOf(3), fetchBatch)).rejects.toMatchObject({
       name: 'AbortError',
     });
+  });
+});
+
+afterEach(() => vi.useRealTimers());
+
+// Like fetch: rejects at once on an already-aborted signal, else when it aborts later.
+const abortable = (signal) =>
+  new Promise((_, reject) => {
+    const fail = () => reject(new DOMException('aborted', 'AbortError'));
+    if (signal.aborted) fail();
+    else signal.addEventListener('abort', fail);
+  });
+
+describe('withDeadline', () => {
+  it('rejects with code TIMEOUT when the call outlives the deadline', async () => {
+    vi.useFakeTimers();
+    const promise = withDeadline(abortable, { timeoutMs: 100 });
+    const assertion = expect(promise).rejects.toMatchObject({ code: 'TIMEOUT' });
+    await vi.advanceTimersByTimeAsync(100);
+    await assertion;
+  });
+
+  it('keeps a parent abort as an AbortError, not a timeout', async () => {
+    const parent = new AbortController();
+    const promise = withDeadline(abortable, { signal: parent.signal, timeoutMs: 1000 });
+    parent.abort();
+    await expect(promise).rejects.toMatchObject({ name: 'AbortError' });
+  });
+
+  it('resolves normally and clears its timer', async () => {
+    await expect(withDeadline(async () => 'ok', { timeoutMs: 100 })).resolves.toBe('ok');
+  });
+});
+
+describe('withRetry', () => {
+  const transient = () => Object.assign(new Error('boom'), { status: 503 });
+
+  it('retries transient errors with backoff, then succeeds', async () => {
+    const wait = vi.fn(async () => {});
+    let calls = 0;
+    const run = async () => {
+      calls += 1;
+      if (calls < 3) throw transient();
+      return 'ok';
+    };
+    await expect(withRetry(run, { wait })).resolves.toBe('ok');
+    expect(calls).toBe(3);
+    expect(wait).toHaveBeenCalledTimes(2);
+    expect(wait.mock.calls[1][0]).toBeGreaterThan(wait.mock.calls[0][0]);
+  });
+
+  it('gives up after the retry budget', async () => {
+    const wait = vi.fn(async () => {});
+    const run = vi.fn(async () => {
+      throw transient();
+    });
+    await expect(withRetry(run, { wait, retries: 2 })).rejects.toMatchObject({ status: 503 });
+    expect(run).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ['400', Object.assign(new Error('bad'), { status: 400 })],
+    ['plain error', new Error('plain')],
+    ['abort', new DOMException('aborted', 'AbortError')],
+  ])('does not retry a %s', async (_label, error) => {
+    const run = vi.fn(async () => {
+      throw error;
+    });
+    await expect(withRetry(run, { wait: async () => {} })).rejects.toBe(error);
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries network TypeErrors and timeouts', async () => {
+    const run = vi
+      .fn()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockRejectedValueOnce(Object.assign(new Error('t'), { code: 'TIMEOUT' }))
+      .mockResolvedValue('ok');
+    await expect(withRetry(run, { wait: async () => {} })).resolves.toBe('ok');
   });
 });

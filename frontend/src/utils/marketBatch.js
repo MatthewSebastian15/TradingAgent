@@ -43,3 +43,73 @@ export async function fetchInBatches(
   await Promise.all(workers);
   return { failed };
 }
+
+export const QUOTE_TIMEOUT_MS = 15_000;
+export const SPARKLINE_TIMEOUT_MS = 20_000;
+export const VALIDATE_TIMEOUT_MS = 10_000;
+
+export function withDeadline(run, { signal, timeoutMs }) {
+  const controller = new AbortController();
+  const onParentAbort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  else signal?.addEventListener('abort', onParentAbort, { once: true });
+
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
+
+  return Promise.resolve()
+    .then(() => run(controller.signal))
+    .catch((error) => {
+      if (timedOut && !signal?.aborted) {
+        throw Object.assign(new Error('Request timed out.'), { code: 'TIMEOUT' });
+      }
+      throw error;
+    })
+    .finally(() => {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', onParentAbort);
+    });
+}
+
+function isTransient(error) {
+  if (error?.name === 'AbortError') return false;
+  return (
+    error?.code === 'TIMEOUT' ||
+    error instanceof TypeError || // fetch network failure
+    error?.status === 429 ||
+    error?.status >= 500
+  );
+}
+
+function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(new DOMException('aborted', 'AbortError'));
+      },
+      { once: true }
+    );
+  });
+}
+
+export async function withRetry(
+  run,
+  { signal, retries = 2, baseDelayMs = 2000, wait = sleep } = {}
+) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      if (attempt >= retries || !isTransient(error) || signal?.aborted || hidden) throw error;
+      const delay = baseDelayMs * 3 ** attempt * (0.8 + Math.random() * 0.4); // ~2 s, ~6 s, ±20 % jitter
+      await wait(delay, signal);
+    }
+  }
+}
