@@ -44,7 +44,10 @@ function getKey() {
         await idbSet(KEY_ID, key);
       }
       return key;
-    })();
+    })().catch((error) => {
+      keyPromise = null; // let the next call retry instead of caching a rejection forever
+      throw error;
+    });
   }
   return keyPromise;
 }

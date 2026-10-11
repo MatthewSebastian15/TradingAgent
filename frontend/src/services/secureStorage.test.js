@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { webcrypto } from 'node:crypto';
 
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { decryptJSON, encryptJSON } from './secureStorage';
 
@@ -25,5 +25,19 @@ describe('secureStorage', () => {
   it('returns null on garbage / legacy plaintext', async () => {
     expect(await decryptJSON('[1,2,3]')).toBeNull();
     expect(await decryptJSON(null)).toBeNull();
+  });
+
+  it('retries key creation after a transient IndexedDB failure', async () => {
+    vi.resetModules();
+    const { encryptJSON: encrypt, decryptJSON: decrypt } = await import('./secureStorage');
+    const spy = vi.spyOn(indexedDB, 'open').mockImplementationOnce(() => {
+      throw new Error('blocked');
+    });
+
+    await expect(encrypt({ a: 1 })).rejects.toThrow('blocked');
+
+    spy.mockRestore();
+    const blob = await encrypt({ a: 1 });
+    expect(await decrypt(blob)).toEqual({ a: 1 });
   });
 });
