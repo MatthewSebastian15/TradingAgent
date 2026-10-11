@@ -149,4 +149,34 @@ describe('useWatchlistQuotes', () => {
     expect(result.current.trendsBySymbol.size).toBe(0);
     unmount();
   });
+
+  it('exposes lastUpdatedAt after a healthy quote batch', async () => {
+    getMarketQuotes.mockReset();
+    getMarketSparklines.mockReset();
+    getMarketQuotes.mockResolvedValue({
+      quotes: [{ sym: 'FRESH1', price: 3, chg: '+0.10%', pos: true, error: false }],
+    });
+    getMarketSparklines.mockResolvedValue({ sparklines: {} });
+
+    const { result, unmount } = mountQuotes(['FRESH1']);
+
+    expect(result.current.lastUpdatedAt).toBeNull();
+    await waitFor(() => expect(result.current.lastUpdatedAt).toEqual(expect.any(Number)));
+    unmount();
+  });
+
+  it('does not advance lastUpdatedAt for an all-error batch', async () => {
+    getMarketQuotes.mockReset();
+    getMarketSparklines.mockReset();
+    getMarketQuotes.mockResolvedValue({
+      quotes: [{ sym: 'FRESH2', price: null, chg: 'N/A', pos: true, error: true }],
+    });
+    getMarketSparklines.mockResolvedValue({ sparklines: {} });
+
+    const { result, unmount } = mountQuotes(['FRESH2']);
+
+    await waitFor(() => expect(result.current.loadingQuotes).toBe(false));
+    expect(result.current.lastUpdatedAt).toBeNull();
+    unmount();
+  });
 });

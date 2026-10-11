@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getMarketQuotes, getMarketSparklines } from '../api/market';
-import { fetchInBatches } from '../utils/marketBatch';
+import { QUOTE_POLL_MS, TREND_CACHE_TTL_MS } from '../constants/watchlist';
+import {
+  fetchInBatches,
+  QUOTE_TIMEOUT_MS,
+  SPARKLINE_TIMEOUT_MS,
+  withDeadline,
+  withRetry,
+} from '../utils/marketBatch';
 import { startVisiblePolling } from '../utils/visiblePolling';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
 
-const QUOTE_POLL_MS = 100 * 1000;
-const TREND_CACHE_TTL_MS = 5 * 60 * 1000;
 const trendCache = new Map();
 const quoteCache = new Map();
 
@@ -72,6 +77,7 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [error, setError] = useState('');
   const [failedSymbols, setFailedSymbols] = useState(() => new Set());
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
   const controllerRef = useRef(null);
 
   const refresh = useCallback(async () => {
@@ -102,10 +108,22 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
       try {
         const { failed } = await fetchInBatches(
           normalizedSymbols,
-          (batch) => getMarketQuotes(batch, { signal }),
+          (batch) =>
+            withRetry(
+              () =>
+                withDeadline(
+                  (deadlineSignal) => getMarketQuotes(batch, { signal: deadlineSignal }),
+                  { signal, timeoutMs: QUOTE_TIMEOUT_MS }
+                ),
+              { signal }
+            ),
           {
             onBatch: (data) => {
-              if (!signal.aborted) setQuotesBySymbol((prev) => mergeQuotes(prev, data?.quotes));
+              if (signal.aborted) return;
+              setQuotesBySymbol((prev) => mergeQuotes(prev, data?.quotes));
+              if ((data?.quotes || []).some((quote) => !quote?.error && quote?.price != null)) {
+                setLastUpdatedAt(Date.now());
+              }
             },
           }
         );
@@ -131,7 +149,16 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
       try {
         const { failed } = await fetchInBatches(
           missingTrendSymbols,
-          (batch) => getMarketSparklines(batch, { range: '1M', signal }),
+          (batch) =>
+            withRetry(
+              () =>
+                withDeadline(
+                  (deadlineSignal) =>
+                    getMarketSparklines(batch, { range: '1M', signal: deadlineSignal }),
+                  { signal, timeoutMs: SPARKLINE_TIMEOUT_MS }
+                ),
+              { signal }
+            ),
           {
             onBatch: (data) => {
               if (signal.aborted) return;
@@ -178,6 +205,7 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
     loadingTrends,
     error,
     failedSymbols,
+    lastUpdatedAt,
     refresh,
   };
 }
