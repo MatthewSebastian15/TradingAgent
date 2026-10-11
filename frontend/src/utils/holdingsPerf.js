@@ -28,7 +28,8 @@ export function positionStats(holding, price, chg) {
 
 // rows: [{ holding, price, chg }]
 export function summarizeHoldings(rows) {
-  let totalCost = 0;
+  let totalCost = 0; // every lot: the "Cost Basis" cell
+  let pricedCost = 0; // lots with a live price: the P/L denominator
   let totalValue = 0;
   let totalDayPL = 0;
   let valued = 0;
@@ -40,6 +41,7 @@ export function summarizeHoldings(rows) {
     totalCost += s.cost;
     if (s.value === null) continue;
     valued += 1;
+    pricedCost += s.cost;
     totalValue += s.value;
     if (s.dayPL !== null) totalDayPL += s.dayPL;
     if (s.plPct !== null) {
@@ -48,16 +50,35 @@ export function summarizeHoldings(rows) {
     }
   }
 
-  const totalPL = valued ? totalValue - totalCost : null;
+  const totalPL = valued ? totalValue - pricedCost : null;
   return {
     count: rows.length,
+    tickerCount: new Set(rows.map(({ holding }) => holding.ticker)).size,
     valuedCount: valued,
+    unpricedCount: rows.length - valued,
     totalCost,
+    pricedCost,
     totalValue: valued ? totalValue : null,
     totalPL,
-    totalPLPct: totalPL !== null && totalCost > 0 ? totalPL / totalCost : null,
+    totalPLPct: totalPL !== null && pricedCost > 0 ? totalPL / pricedCost : null,
     totalDayPL: valued ? totalDayPL : null,
     best,
     worst,
   };
+}
+
+// rows: [{ holding, price, chg, currency }] — one summary per currency, largest value first.
+export function summarizeByCurrency(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const currency = row.currency || 'USD';
+    if (!groups.has(currency)) groups.set(currency, []);
+    groups.get(currency).push(row);
+  }
+  return Array.from(groups, ([currency, groupRows]) => ({
+    currency,
+    ...summarizeHoldings(groupRows),
+  })).sort(
+    (a, b) => (b.totalValue ?? -1) - (a.totalValue ?? -1) || a.currency.localeCompare(b.currency)
+  );
 }
