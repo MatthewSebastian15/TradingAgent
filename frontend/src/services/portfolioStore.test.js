@@ -12,7 +12,13 @@ vi.mock('./secureStorage', () => ({
   },
 }));
 
-import { addTracked, clearTracked, readTracked, removeTracked } from './portfolioStore';
+import {
+  addTracked,
+  clearTracked,
+  readTracked,
+  readTrackedDetailed,
+  removeTracked,
+} from './portfolioStore';
 
 const base = {
   id: 'job-1',
@@ -58,5 +64,19 @@ describe('portfolioStore', () => {
 
     await clearTracked();
     expect(await readTracked()).toHaveLength(0);
+  });
+
+  it('never overwrites or deletes an unreadable blob and reports why', async () => {
+    const envelope = JSON.stringify({ v: 1, iv: 'aaa', ct: 'bbb' });
+    localStorage.setItem('portfolio_tracked_v1', envelope);
+
+    expect((await readTrackedDetailed()).status).toBe('unreadable');
+    expect(await addTracked(base)).toEqual({ ok: false, reason: 'unreadable' });
+    expect(await removeTracked('job-1')).toEqual({ ok: false, reason: 'unreadable' });
+    expect(localStorage.getItem('portfolio_tracked_v1')).toBe(envelope);
+    expect(localStorage.getItem('portfolio_tracked_v1:unreadable')).toBe(envelope);
+
+    await clearTracked();
+    expect(await addTracked(base)).toEqual({ ok: true });
   });
 });
