@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { getMarketQuotes, getMarketSparklines } from '../api/market';
+import { fetchInBatches } from '../utils/marketBatch';
 import { startVisiblePolling } from '../utils/visiblePolling';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
 
@@ -15,15 +16,30 @@ function uniqueSymbols(symbols) {
   );
 }
 
-function mapQuotes(quotes) {
-  const nextMap = new Map();
+function mergeQuotes(previous, quotes) {
+  const next = new Map(previous);
   (Array.isArray(quotes) ? quotes : []).forEach((quote) => {
     const symbol = normalizeWatchlistSymbol(quote?.sym || quote?.symbol);
     if (!symbol) return;
-    nextMap.set(symbol, { ...quote, sym: symbol });
-    quoteCache.set(symbol, { ...quote, sym: symbol });
+    const normalized = { ...quote, sym: symbol };
+    next.set(symbol, normalized);
+    quoteCache.set(symbol, normalized);
   });
-  return nextMap;
+  return next;
+}
+
+function normalizeSparkline(values) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => Number(value))
+    .filter(Number.isFinite)
+    .slice(-18);
+}
+
+function describeFailures(failed, total, label) {
+  if (!failed.length) return '';
+  const count = failed.reduce((sum, item) => sum + item.symbols.length, 0);
+  if (count >= total) return failed[0].error?.message || `Failed to load watchlist ${label}.`;
+  return `${label[0].toUpperCase()}${label.slice(1)} unavailable for ${count} of ${total} symbols.`;
 }
 
 function readCachedQuotes(symbols) {
@@ -55,6 +71,7 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
   const [loadingQuotes, setLoadingQuotes] = useState(false);
   const [loadingTrends, setLoadingTrends] = useState(false);
   const [error, setError] = useState('');
+  const [failedSymbols, setFailedSymbols] = useState(() => new Set());
   const controllerRef = useRef(null);
 
   const refresh = useCallback(async () => {
@@ -63,6 +80,7 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
     if (!normalizedSymbols.length) {
       setQuotesBySymbol(new Map());
       setTrendsBySymbol(new Map());
+      setFailedSymbols(new Set());
       setLoadingQuotes(false);
       setLoadingTrends(false);
       setError('');
@@ -71,61 +89,76 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
 
     const controller = new AbortController();
     controllerRef.current = controller;
-    setQuotesBySymbol(readCachedQuotes(normalizedSymbols));
-    setTrendsBySymbol(trends ? readCachedTrends(normalizedSymbols) : new Map());
-    setError('');
-
-    setLoadingQuotes(true);
-    getMarketQuotes(normalizedSymbols, { signal: controller.signal })
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        setQuotesBySymbol(mapQuotes(data?.quotes));
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return;
-        setError(err.message || 'Failed to load watchlist quotes.');
-        setQuotesBySymbol(readCachedQuotes(normalizedSymbols));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingQuotes(false);
-      });
+    const { signal } = controller;
 
     const cachedTrends = trends ? readCachedTrends(normalizedSymbols) : new Map();
+    setQuotesBySymbol(readCachedQuotes(normalizedSymbols));
+    setTrendsBySymbol(cachedTrends);
+    setFailedSymbols(new Set());
+    setError('');
+
+    const loadQuotes = async () => {
+      setLoadingQuotes(true);
+      try {
+        const { failed } = await fetchInBatches(
+          normalizedSymbols,
+          (batch) => getMarketQuotes(batch, { signal }),
+          {
+            onBatch: (data) => {
+              if (!signal.aborted) setQuotesBySymbol((prev) => mergeQuotes(prev, data?.quotes));
+            },
+          }
+        );
+        if (signal.aborted || !failed.length) return;
+        setFailedSymbols(new Set(failed.flatMap((item) => item.symbols)));
+        setError((prev) => prev || describeFailures(failed, normalizedSymbols.length, 'quotes'));
+      } catch (err) {
+        if (err.name !== 'AbortError') setError(err.message || 'Failed to load watchlist quotes.');
+      } finally {
+        if (!signal.aborted) setLoadingQuotes(false);
+      }
+    };
+
     const missingTrendSymbols = trends
       ? normalizedSymbols.filter((symbol) => !cachedTrends.has(symbol))
       : [];
+    const loadTrends = async () => {
+      if (!missingTrendSymbols.length) {
+        setLoadingTrends(false);
+        return;
+      }
+      setLoadingTrends(true);
+      try {
+        const { failed } = await fetchInBatches(
+          missingTrendSymbols,
+          (batch) => getMarketSparklines(batch, { range: '1M', signal }),
+          {
+            onBatch: (data) => {
+              if (signal.aborted) return;
+              const now = Date.now();
+              setTrendsBySymbol((prev) => {
+                const next = new Map(prev);
+                Object.entries(data?.sparklines || {}).forEach(([symbol, values]) => {
+                  const key = normalizeWatchlistSymbol(symbol);
+                  const normalized = normalizeSparkline(values);
+                  trendCache.set(key, { cachedAt: now, values: normalized });
+                  next.set(key, normalized);
+                });
+                return next;
+              });
+            },
+          }
+        );
+        if (signal.aborted || !failed.length) return;
+        setError((prev) => prev || describeFailures(failed, missingTrendSymbols.length, 'trends'));
+      } catch (err) {
+        if (err.name !== 'AbortError') setError(err.message || 'Failed to load watchlist trends.');
+      } finally {
+        if (!signal.aborted) setLoadingTrends(false);
+      }
+    };
 
-    if (!missingTrendSymbols.length) {
-      setTrendsBySymbol(cachedTrends);
-      setLoadingTrends(false);
-      return;
-    }
-
-    setLoadingTrends(true);
-    getMarketSparklines(missingTrendSymbols, { range: '1M', signal: controller.signal })
-      .then((data) => {
-        if (controller.signal.aborted) return;
-        const now = Date.now();
-        const nextMap = new Map(cachedTrends);
-        Object.entries(data?.sparklines || {}).forEach(([symbol, values]) => {
-          const normalizedSymbol = normalizeWatchlistSymbol(symbol);
-          const normalizedValues = (Array.isArray(values) ? values : [])
-            .map((value) => Number(value))
-            .filter(Number.isFinite)
-            .slice(-18);
-          trendCache.set(normalizedSymbol, { cachedAt: now, values: normalizedValues });
-          nextMap.set(normalizedSymbol, normalizedValues);
-        });
-        setTrendsBySymbol(nextMap);
-      })
-      .catch((err) => {
-        if (err.name === 'AbortError') return;
-        setError(err.message || 'Failed to load watchlist trends.');
-        setTrendsBySymbol(cachedTrends);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoadingTrends(false);
-      });
+    await Promise.all([loadQuotes(), loadTrends()]);
   }, [normalizedSymbols, trends]);
 
   useEffect(() => {
@@ -144,6 +177,7 @@ export function useWatchlistQuotes(symbols, { trends = true } = {}) {
     loadingQuotes,
     loadingTrends,
     error,
+    failedSymbols,
     refresh,
   };
 }
