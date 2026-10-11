@@ -70,3 +70,10 @@ describe('horizonInfo', () => {
     expect(info.label).toBe('5d / 3M');
   });
 });
+
+describe('returnPct null prices', () => {
+  it('returns null when the current price is null instead of -100% / +100%', () => {
+    expect(returnPct('BUY', 100, null)).toBeNull();
+    expect(returnPct('SELL', 100, null)).toBeNull();
+  });
+});

@@ -1,3 +1,5 @@
+import { toPrice } from './price';
+
 // Directional performance for tracked AI recommendations. A BUY profits when
 // price rises; a SELL profits when it falls; HOLD/WAIT are neutral (price change
 // shown, but excluded from win rate).
@@ -20,11 +22,9 @@ export function isNeutral(decision) {
 
 // Signed return as a fraction (0.05 = +5%). null when prices are unusable.
 export function returnPct(decision, entry, current) {
-  const entryPrice = Number(entry);
-  const currentPrice = Number(current);
-  if (!Number.isFinite(entryPrice) || !Number.isFinite(currentPrice) || entryPrice === 0) {
-    return null;
-  }
+  const entryPrice = toPrice(entry);
+  const currentPrice = toPrice(current);
+  if (entryPrice === null || currentPrice === null) return null;
   const raw = (currentPrice - entryPrice) / entryPrice;
   const direction = decisionDirection(decision);
   return direction === 0 ? raw : raw * direction;

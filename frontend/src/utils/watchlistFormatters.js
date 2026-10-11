@@ -5,6 +5,7 @@ export function normalizeWatchlistSymbol(value) {
 }
 
 export function formatLastPrice(value) {
+  if (value === null || value === undefined || value === '') return '-';
   const numberValue = Number(value);
   if (!Number.isFinite(numberValue)) return '-';
 

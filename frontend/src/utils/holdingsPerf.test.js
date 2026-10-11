@@ -41,3 +41,12 @@ describe('holdingsPerf', () => {
     expect(sum.worst.ticker).toBe('B');
   });
 });
+
+describe('holdingsPerf null prices', () => {
+  it('does not value a lot at zero when the quote price is null', () => {
+    const s = positionStats({ shares: 10, cost_basis: 100 }, null, 'N/A');
+    expect(s.value).toBeNull();
+    expect(s.pl).toBeNull();
+    expect(s.plPct).toBeNull();
+  });
+});

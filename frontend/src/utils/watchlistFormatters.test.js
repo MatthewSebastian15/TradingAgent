@@ -58,3 +58,11 @@ describe('formatVolume', () => {
     expect(formatVolume(undefined)).toBe('-');
   });
 });
+
+describe('formatLastPrice missing values', () => {
+  it('shows a dash for a missing price instead of 0.00', () => {
+    expect(formatLastPrice(null)).toBe('-');
+    expect(formatLastPrice(undefined)).toBe('-');
+    expect(formatLastPrice(1234.5)).toBe('1,234.50');
+  });
+});

@@ -1,3 +1,5 @@
+import { toPrice } from './price';
+
 // Market-value performance for user-entered holdings. Long-only: gain when the
 // current price exceeds cost basis.
 
@@ -12,8 +14,8 @@ export function changeFraction(chg) {
 export function positionStats(holding, price, chg) {
   const shares = Number(holding.shares);
   const cost = shares * Number(holding.cost_basis);
-  const hasPrice = Number.isFinite(Number(price));
-  const value = hasPrice ? shares * Number(price) : null;
+  const livePrice = toPrice(price);
+  const value = livePrice === null ? null : shares * livePrice;
   const pl = value === null ? null : value - cost;
   const plPct = pl === null || cost === 0 ? null : pl / cost;
 
