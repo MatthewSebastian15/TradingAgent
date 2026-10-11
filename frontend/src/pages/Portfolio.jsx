@@ -28,6 +28,13 @@ const TABS = [
   { id: 'holdings', label: 'My Holdings' },
 ];
 
+const SAVE_ERRORS = {
+  unreadable:
+    'Saved data on this device could not be read. Start fresh or restore a backup before saving changes.',
+  write_failed: 'Could not save: browser storage is full or blocked.',
+  invalid: 'That entry is not valid.',
+};
+
 function toSignal(entry) {
   const id = historyResourceId(entry);
   if (!id || !entry.ticker) return null;
@@ -136,7 +143,7 @@ export default function Portfolio() {
         if (!Number.isFinite(entryPrice)) {
           throw new Error(`No live price for ${signal.ticker}.`);
         }
-        await track({
+        const saved = await track({
           id: signal.id,
           ticker: signal.ticker,
           market: signal.market,
@@ -150,6 +157,9 @@ export default function Portfolio() {
           analysis_created_at: signal.analysis_created_at,
           trade_date: signal.trade_date,
         });
+        if (saved?.ok === false) {
+          throw new Error(SAVE_ERRORS[saved.reason] || SAVE_ERRORS.invalid);
+        }
       } catch (err) {
         setError(err.message || 'Failed to track signal.');
       } finally {
@@ -175,7 +185,15 @@ export default function Portfolio() {
         setHoldingsError('Average cost must be zero or more.');
         return false;
       }
-      await addHolding({ ticker, shares: record.shares, cost_basis: record.cost_basis });
+      const result = await addHolding({
+        ticker,
+        shares: record.shares,
+        cost_basis: record.cost_basis,
+      });
+      if (result?.ok === false) {
+        setHoldingsError(SAVE_ERRORS[result.reason] || SAVE_ERRORS.invalid);
+        return false;
+      }
       return true;
     },
     [addHolding]

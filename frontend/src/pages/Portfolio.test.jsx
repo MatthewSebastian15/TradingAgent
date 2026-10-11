@@ -98,4 +98,23 @@ describe('Portfolio page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
     expect(useWatchlistQuotes.mock.calls.at(-1)[0]).toEqual(['BBCA.JK']);
   });
+
+  it('explains why adding a holding failed instead of failing silently', async () => {
+    useHoldingsStore.mockImplementation(() => ({
+      holdings: [],
+      add: vi.fn(async () => ({ ok: false, reason: 'write_failed' })),
+      remove: vi.fn(),
+    }));
+    render(<Portfolio />);
+    await screen.findByText('NVDA');
+    fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
+
+    fireEvent.change(screen.getByLabelText('Ticker'), { target: { value: 'AAPL' } });
+    fireEvent.change(screen.getByLabelText('Shares'), { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Average cost per share'), { target: { value: '10' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/storage is full or blocked/i);
+    expect(screen.getByLabelText('Ticker').value).toBe('AAPL'); // form kept so nothing is lost
+  });
 });
