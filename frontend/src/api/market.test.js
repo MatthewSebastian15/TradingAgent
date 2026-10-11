@@ -144,4 +144,13 @@ describe('error mapping', () => {
     globalThis.fetch.mockResolvedValue({ ok: false, status: 503 });
     await expect(getMarketPresets()).rejects.toThrow('HTTP 503');
   });
+
+  it('attaches the HTTP status to thrown errors', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 400, text: async () => '' });
+
+    await expect(getMarketQuotes(['BAD'])).rejects.toMatchObject({
+      message: 'HTTP 400',
+      status: 400,
+    });
+  });
 });

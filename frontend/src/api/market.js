@@ -1,7 +1,11 @@
 import { buildApiUrl, buildAuthHeaders, buildHeaders, readHttpError } from '../utils/api';
 
 async function parseMarketResponse(response) {
-  if (!response.ok) throw new Error(await readHttpError(response));
+  if (!response.ok) {
+    const error = new Error(await readHttpError(response));
+    error.status = response.status;
+    throw error;
+  }
   return response.json();
 }
 
