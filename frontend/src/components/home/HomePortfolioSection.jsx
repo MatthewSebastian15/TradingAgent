@@ -16,7 +16,7 @@ export default function HomePortfolioSection() {
     () => holdings.map((h) => normalizeWatchlistSymbol(h.ticker)).filter(Boolean),
     [holdings]
   );
-  const { quotesBySymbol } = useWatchlistQuotes(symbols);
+  const { quotesBySymbol } = useWatchlistQuotes(symbols, { trends: false });
 
   return (
     <section className="shrink-0 border-t border-bloomberg-border">
