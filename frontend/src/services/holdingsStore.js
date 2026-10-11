@@ -1,21 +1,9 @@
-import { decryptJSON, encryptJSON } from './secureStorage';
+import { createEncryptedListStore } from './encryptedListStore';
 
 // User-entered portfolio holdings (real positions they own). Encrypted at rest
 // with the same device key as the watchlist/history/tracked stores.
-const STORAGE_KEY = 'portfolio_holdings_v1';
+export const HOLDINGS_STORAGE_KEY = 'portfolio_holdings_v1';
 const SCHEMA_VERSION = 1;
-
-// Serialize read-modify-write so concurrent add/remove calls can't clobber each
-// other (encryption makes them async). Mirrors portfolioStore.
-let writeChain = Promise.resolve();
-function enqueueWrite(task) {
-  const run = writeChain.then(task, task);
-  writeChain = run.then(
-    () => {},
-    () => {}
-  );
-  return run;
-}
 
 function textOrNull(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -39,43 +27,23 @@ function normalize(entry) {
   };
 }
 
-export async function readHoldings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = await decryptJSON(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.map(normalize).filter(Boolean);
-  } catch {
-    return [];
-  }
-}
+const store = createEncryptedListStore({ key: HOLDINGS_STORAGE_KEY, normalize });
 
-async function writeHoldings(entries) {
-  const clean = entries.map(normalize).filter(Boolean);
-  try {
-    if (clean.length) {
-      localStorage.setItem(STORAGE_KEY, await encryptJSON(clean));
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  } catch {
-    // Ignore unavailable or restricted localStorage.
-  }
+export const readHoldingsDetailed = () => store.readDetailed();
+
+export async function readHoldings() {
+  return (await store.readDetailed()).items;
 }
 
 export function addHolding(record) {
-  return enqueueWrite(async () => {
+  return store.mutate((current) => {
     const next = normalize(record);
-    if (!next) return;
-    const current = await readHoldings();
-    await writeHoldings([next, ...current]);
+    return next ? [next, ...current] : null;
   });
 }
 
 export function removeHolding(id) {
-  return enqueueWrite(async () => {
-    const current = await readHoldings();
-    await writeHoldings(current.filter((entry) => entry.id !== id));
-  });
+  return store.mutate((current) => current.filter((entry) => entry.id !== id));
 }
+
+export const clearHoldings = () => store.clear();

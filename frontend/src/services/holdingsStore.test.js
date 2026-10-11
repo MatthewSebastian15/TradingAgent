@@ -12,7 +12,13 @@ vi.mock('./secureStorage', () => ({
   },
 }));
 
-import { addHolding, readHoldings, removeHolding } from './holdingsStore';
+import {
+  addHolding,
+  clearHoldings,
+  readHoldings,
+  readHoldingsDetailed,
+  removeHolding,
+} from './holdingsStore';
 
 beforeEach(() => {
   localStorage.clear();
@@ -76,5 +82,35 @@ describe('holdingsStore', () => {
       addHolding({ ticker: 'GOOG', shares: 3, cost_basis: 3 }),
     ]);
     expect(await readHoldings()).toHaveLength(3);
+  });
+
+  it('add and remove resolve to typed results', async () => {
+    expect(await addHolding({ ticker: 'AAPL', shares: 1, cost_basis: 1 })).toEqual({ ok: true });
+    expect(await addHolding({ ticker: '', shares: 1, cost_basis: 1 })).toEqual({
+      ok: false,
+      reason: 'invalid',
+    });
+  });
+
+  it('never overwrites or deletes an unreadable blob', async () => {
+    const envelope = JSON.stringify({ v: 1, iv: 'aaa', ct: 'bbb' });
+    localStorage.setItem('portfolio_holdings_v1', envelope);
+
+    expect((await readHoldingsDetailed()).status).toBe('unreadable');
+    expect(await addHolding({ ticker: 'AAPL', shares: 1, cost_basis: 1 })).toEqual({
+      ok: false,
+      reason: 'unreadable',
+    });
+    expect(await removeHolding('anything')).toEqual({ ok: false, reason: 'unreadable' });
+    expect(localStorage.getItem('portfolio_holdings_v1')).toBe(envelope);
+    expect(localStorage.getItem('portfolio_holdings_v1:unreadable')).toBe(envelope);
+  });
+
+  it('clearHoldings starts fresh so adds work again', async () => {
+    localStorage.setItem('portfolio_holdings_v1', JSON.stringify({ v: 1, iv: 'a', ct: 'b' }));
+    await clearHoldings();
+
+    expect(await addHolding({ ticker: 'AAPL', shares: 1, cost_basis: 1 })).toEqual({ ok: true });
+    expect(await readHoldings()).toHaveLength(1);
   });
 });
