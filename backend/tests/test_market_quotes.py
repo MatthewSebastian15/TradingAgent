@@ -91,3 +91,71 @@ def test_fetch_quote_reads_volume_from_fast_info(monkeypatch):
     quote = market_routes._fetch_quote("AAPL")
 
     assert quote["volume"] == 1580000.0
+
+
+def _install_fake_yf(monkeypatch, **fast_info):
+    fake_yf = SimpleNamespace(
+        Ticker=lambda _symbol: SimpleNamespace(fast_info=SimpleNamespace(**fast_info))
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "tradingagents.dataflows.providers.yfinance_runtime",
+        SimpleNamespace(yf=fake_yf),
+    )
+
+
+def test_fetch_quote_returns_currency_exactly_as_reported(monkeypatch):
+    _install_fake_yf(monkeypatch, previous_close=100, last_price=110, last_volume=1, currency="GBp")
+
+    quote = market_routes._fetch_quote("VOD.L")
+
+    assert quote["currency"] == "GBp"  # pence, not GBP: case must survive
+
+
+def test_fetch_quote_currency_is_none_when_the_vendor_omits_it(monkeypatch):
+    _install_fake_yf(monkeypatch, previous_close=100, last_price=110, last_volume=1)
+
+    assert market_routes._fetch_quote("AAPL")["currency"] is None
+
+
+def test_fetch_quote_failure_row_has_no_currency(monkeypatch):
+    class Boom:
+        @property
+        def fast_info(self):
+            raise RuntimeError("vendor down")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "tradingagents.dataflows.providers.yfinance_runtime",
+        SimpleNamespace(yf=SimpleNamespace(Ticker=lambda _symbol: Boom())),
+    )
+
+    quote = market_routes._fetch_quote("AAPL")
+
+    assert quote["error"] is True
+    assert "currency" not in quote
+
+
+def test_market_quotes_response_passes_currency_through(client, monkeypatch):
+    market_routes._QUOTE_CACHE.clear()
+
+    async def fake_fetch_quotes(symbols):
+        return [
+            {
+                "sym": "BBCA.JK",
+                "chg": "+1.00%",
+                "pos": True,
+                "price": 9000.0,
+                "volume": 1200,
+                "currency": "IDR",
+                "error": False,
+            },
+            {"sym": "ZZZ", "chg": "N/A", "pos": True, "price": None, "volume": None, "error": True},
+        ]
+
+    monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
+
+    quotes = client.get("/api/market/quotes?symbols=BBCA.JK,ZZZ").json()["quotes"]
+
+    assert quotes[0]["currency"] == "IDR"
+    assert quotes[1]["currency"] is None

@@ -503,6 +503,13 @@ def _fast_info_value(info: Any, *names: str) -> Any:
     return None
 
 
+def _quote_currency(info: Any) -> str | None:
+    """Currency code exactly as the vendor reports it ('GBp' means pence: keep the case)."""
+    value = _fast_info_value(info, "currency")
+    text = str(value).strip() if value else ""
+    return text or None
+
+
 def _fetch_quote(symbol: str) -> dict:
     """Return a minimal quote dict for *symbol* using yfinance fast_info."""
     try:
@@ -515,6 +522,7 @@ def _fetch_quote(symbol: str) -> dict:
         previous_close = _fast_info_value(info, "previous_close", "regularMarketPreviousClose")
         last_price = _fast_info_value(info, "last_price", "regularMarketPrice")
         volume = _as_float(_fast_info_value(info, "last_volume", "regularMarketVolume", "volume"))
+        currency = _quote_currency(info)
 
         if previous_close and last_price and previous_close != 0:
             raw_chg = (last_price - previous_close) / previous_close * 100
@@ -531,6 +539,7 @@ def _fetch_quote(symbol: str) -> dict:
             "pos": pos,
             "price": round(last_price, 2) if last_price else None,
             "volume": volume,
+            "currency": currency,
             "error": False,
         }
 

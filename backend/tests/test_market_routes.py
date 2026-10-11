@@ -43,6 +43,7 @@ def test_market_quotes_returns_valid_symbols(client, monkeypatch):
             "pos": True,
             "price": 9800.0,
             "volume": 1200000.0,
+            "currency": None,
             "error": False,
         },
         {
@@ -51,6 +52,7 @@ def test_market_quotes_returns_valid_symbols(client, monkeypatch):
             "pos": False,
             "price": 920.0,
             "volume": 246900000.0,
+            "currency": None,
             "error": False,
         },
     ]
@@ -119,6 +121,7 @@ def test_fetch_quote_handles_missing_last_price(monkeypatch):
         "pos": True,
         "price": None,
         "volume": None,
+        "currency": None,
         "error": False,
     }
 
@@ -143,6 +146,7 @@ def test_fetch_quote_handles_previous_close_zero(monkeypatch):
         "pos": True,
         "price": 10,
         "volume": None,
+        "currency": None,
         "error": False,
     }
 

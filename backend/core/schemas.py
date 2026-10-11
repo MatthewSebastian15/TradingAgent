@@ -457,6 +457,7 @@ class MarketQuote(ApiSchema):
     pos: bool
     price: float | None = None
     volume: float | int | None = None
+    currency: str | None = None
     error: bool = False
 
 
