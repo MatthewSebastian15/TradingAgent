@@ -1,44 +1,34 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 
-import { addTracked, readTracked, removeTracked } from '../services/portfolioStore';
+import { useStoredList } from './useStoredList';
+import {
+  addTracked,
+  clearTracked,
+  readTrackedDetailed,
+  removeTracked,
+  TRACKED_STORAGE_KEY,
+} from '../services/portfolioStore';
+
+const store = { key: TRACKED_STORAGE_KEY, readDetailed: readTrackedDetailed, clear: clearTracked };
 
 export function usePortfolioStore() {
-  const [tracked, setTracked] = useState([]);
-  const [hydrated, setHydrated] = useState(false);
-  const aliveRef = useRef(true);
+  const { items, hydrated, storageStatus, refresh, run, dismissStorageError } =
+    useStoredList(store);
 
-  const refresh = useCallback(async () => {
-    const list = await readTracked();
-    if (!aliveRef.current) return;
-    setTracked(list);
-    setHydrated(true);
-  }, []);
+  const track = useCallback((record) => run(() => addTracked(record)), [run]);
+  const untrack = useCallback((id) => run(() => removeTracked(id)), [run]);
+  const resetUnreadable = useCallback(() => run(clearTracked), [run]);
+  const trackedIds = useMemo(() => new Set(items.map((entry) => entry.id)), [items]);
 
-  useEffect(() => {
-    aliveRef.current = true;
-    refresh();
-    return () => {
-      aliveRef.current = false;
-    };
-  }, [refresh]);
-
-  const track = useCallback(
-    async (record) => {
-      await addTracked(record);
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const untrack = useCallback(
-    async (id) => {
-      await removeTracked(id);
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const trackedIds = useMemo(() => new Set(tracked.map((entry) => entry.id)), [tracked]);
-
-  return { tracked, trackedIds, hydrated, track, untrack };
+  return {
+    tracked: items,
+    trackedIds,
+    hydrated,
+    storageStatus,
+    track,
+    untrack,
+    resetUnreadable,
+    retryRead: refresh,
+    dismissStorageError,
+  };
 }

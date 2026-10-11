@@ -1,42 +1,36 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback } from 'react';
 
-import { addHolding, readHoldings, removeHolding } from '../services/holdingsStore';
+import { useStoredList } from './useStoredList';
+import {
+  addHolding,
+  clearHoldings,
+  HOLDINGS_STORAGE_KEY,
+  readHoldingsDetailed,
+  removeHolding,
+} from '../services/holdingsStore';
+
+const store = {
+  key: HOLDINGS_STORAGE_KEY,
+  readDetailed: readHoldingsDetailed,
+  clear: clearHoldings,
+};
 
 export function useHoldingsStore() {
-  const [holdings, setHoldings] = useState([]);
-  const [hydrated, setHydrated] = useState(false);
-  const aliveRef = useRef(true);
+  const { items, hydrated, storageStatus, refresh, run, dismissStorageError } =
+    useStoredList(store);
 
-  const refresh = useCallback(async () => {
-    const list = await readHoldings();
-    if (!aliveRef.current) return;
-    setHoldings(list);
-    setHydrated(true);
-  }, []);
+  const add = useCallback((record) => run(() => addHolding(record)), [run]);
+  const remove = useCallback((id) => run(() => removeHolding(id)), [run]);
+  const resetUnreadable = useCallback(() => run(clearHoldings), [run]);
 
-  useEffect(() => {
-    aliveRef.current = true;
-    refresh();
-    return () => {
-      aliveRef.current = false;
-    };
-  }, [refresh]);
-
-  const add = useCallback(
-    async (record) => {
-      await addHolding(record);
-      await refresh();
-    },
-    [refresh]
-  );
-
-  const remove = useCallback(
-    async (id) => {
-      await removeHolding(id);
-      await refresh();
-    },
-    [refresh]
-  );
-
-  return { holdings, hydrated, add, remove };
+  return {
+    holdings: items,
+    hydrated,
+    storageStatus,
+    add,
+    remove,
+    resetUnreadable,
+    retryRead: refresh,
+    dismissStorageError,
+  };
 }

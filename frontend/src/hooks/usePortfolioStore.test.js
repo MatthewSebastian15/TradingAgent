@@ -2,19 +2,23 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePortfolioStore } from './usePortfolioStore';
-import { addTracked, readTracked, removeTracked } from '../services/portfolioStore';
+import { addTracked, readTrackedDetailed, removeTracked } from '../services/portfolioStore';
 
 vi.mock('../services/portfolioStore', () => ({
   addTracked: vi.fn(),
-  readTracked: vi.fn(),
+  readTrackedDetailed: vi.fn(),
   removeTracked: vi.fn(),
+  clearTracked: vi.fn(),
+  TRACKED_STORAGE_KEY: 'portfolio_tracked_v1',
 }));
+
+const ok = (items) => ({ items, status: 'ok' });
 
 describe('usePortfolioStore', () => {
   beforeEach(() => {
-    readTracked.mockResolvedValue([]);
-    addTracked.mockResolvedValue();
-    removeTracked.mockResolvedValue();
+    readTrackedDetailed.mockResolvedValue(ok([]));
+    addTracked.mockResolvedValue({ ok: true });
+    removeTracked.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -22,7 +26,7 @@ describe('usePortfolioStore', () => {
   });
 
   it('hydrates from the store on mount', async () => {
-    readTracked.mockResolvedValue([{ id: 'a1', ticker: 'AAPL' }]);
+    readTrackedDetailed.mockResolvedValue(ok([{ id: 'a1', ticker: 'AAPL' }]));
 
     const { result } = renderHook(() => usePortfolioStore());
 
@@ -36,7 +40,7 @@ describe('usePortfolioStore', () => {
     const { result } = renderHook(() => usePortfolioStore());
     await waitFor(() => expect(result.current.hydrated).toBe(true));
 
-    readTracked.mockResolvedValue([{ id: 'b2', ticker: 'MSFT' }]);
+    readTrackedDetailed.mockResolvedValue(ok([{ id: 'b2', ticker: 'MSFT' }]));
     await act(() => result.current.track({ id: 'b2', ticker: 'MSFT' }));
 
     expect(addTracked).toHaveBeenCalledWith({ id: 'b2', ticker: 'MSFT' });
@@ -44,15 +48,26 @@ describe('usePortfolioStore', () => {
   });
 
   it('untrack removes by id then refreshes', async () => {
-    readTracked.mockResolvedValue([{ id: 'b2', ticker: 'MSFT' }]);
+    readTrackedDetailed.mockResolvedValue(ok([{ id: 'b2', ticker: 'MSFT' }]));
     const { result } = renderHook(() => usePortfolioStore());
     await waitFor(() => expect(result.current.tracked).toHaveLength(1));
 
-    readTracked.mockResolvedValue([]);
+    readTrackedDetailed.mockResolvedValue(ok([]));
     await act(() => result.current.untrack('b2'));
 
     expect(removeTracked).toHaveBeenCalledWith('b2');
     expect(result.current.tracked).toEqual([]);
     expect(result.current.trackedIds.size).toBe(0);
+  });
+
+  it('exposes unreadable storage and lets the user start fresh', async () => {
+    readTrackedDetailed.mockResolvedValue({ items: [], status: 'unreadable' });
+    const { result } = renderHook(() => usePortfolioStore());
+
+    await waitFor(() => expect(result.current.storageStatus).toBe('unreadable'));
+
+    readTrackedDetailed.mockResolvedValue({ items: [], status: 'empty' });
+    await act(() => result.current.resetUnreadable());
+    expect(result.current.storageStatus).toBe('ok');
   });
 });
