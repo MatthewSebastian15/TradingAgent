@@ -149,4 +149,24 @@ describe('WatchlistPage', () => {
     expect(screen.queryByLabelText('Delete NVDA')).toBeNull();
     expect(screen.getByText('No ticker in this group yet.')).toBeTruthy();
   });
+
+  it('does not refetch the old symbol list when a ticker is added', async () => {
+    const { getMarketQuotes } = await import('../../api/market');
+    window.localStorage.setItem(
+      'tradingagents:watchlists:v1',
+      JSON.stringify({
+        version: 1,
+        activeGroupId: 'g1',
+        groups: [{ id: 'g1', name: 'US Tech', items: [{ symbol: 'AAPL', name: 'Apple' }] }],
+      })
+    );
+    getMarketQuotes.mockClear();
+    const user = userEvent.setup();
+    render(<WatchlistPage />);
+    await screen.findByLabelText('Delete AAPL');
+    await addNvda(user);
+
+    const singleSymbolCalls = getMarketQuotes.mock.calls.filter(([batch]) => batch.length === 1);
+    expect(singleSymbolCalls).toHaveLength(1);
+  });
 });

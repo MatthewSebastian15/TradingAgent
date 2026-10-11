@@ -47,7 +47,7 @@ export default function WatchlistPage() {
     () => (activeGroup?.items || []).map((item) => item.symbol),
     [activeGroup]
   );
-  const { quotesBySymbol, trendsBySymbol, loadingQuotes, loadingTrends, error, refresh } =
+  const { quotesBySymbol, trendsBySymbol, loadingQuotes, loadingTrends, error } =
     useWatchlistQuotes(activeSymbols);
 
   const existingNames = useMemo(() => groups.map((group) => group.name), [groups]);
@@ -144,7 +144,6 @@ export default function WatchlistPage() {
     setSelectedTicker(null);
     setInputValue('');
     setInputError('');
-    refresh();
   }
 
   function handleInputChange(nextValue) {
