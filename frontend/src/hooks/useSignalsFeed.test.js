@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
+import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./useAnalysisHistoryStore', () => ({
@@ -142,5 +143,16 @@ describe('useSignalsFeed', () => {
     unmount();
 
     expect(signal.aborted).toBe(true);
+  });
+
+  it('keeps exactly one live first-page request under StrictMode (the extra one is aborted)', async () => {
+    fetchAnalysisHistory.mockImplementation(() => new Promise(() => {}));
+
+    renderHook(() => useSignalsFeed(), { wrapper: React.StrictMode });
+    await waitFor(() => expect(fetchAnalysisHistory).toHaveBeenCalled());
+
+    const signals = fetchAnalysisHistory.mock.calls.map(([options]) => options.signal);
+    const live = signals.filter((signal) => !signal.aborted);
+    expect(live).toHaveLength(1);
   });
 });
