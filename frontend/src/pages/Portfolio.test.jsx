@@ -262,4 +262,14 @@ describe('Portfolio page', () => {
 
     expect((await screen.findByRole('alert')).textContent).toBe('No live price for NVDA.');
   });
+
+  it('says the symbol is not recognised when the quote request is rejected as invalid', async () => {
+    const { getMarketQuotes } = await import('../api/market');
+    getMarketQuotes.mockRejectedValueOnce(Object.assign(new Error('bad'), { status: 400 }));
+
+    render(<Portfolio />);
+    fireEvent.click(await screen.findByLabelText('Track NVDA'));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('NVDA is not a recognised symbol.');
+  });
 });

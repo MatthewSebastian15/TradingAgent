@@ -98,6 +98,9 @@ describe('trackSignal', () => {
     getMarketQuotes.mockRejectedValue(new TypeError('Failed to fetch'));
     expect(await trackSignal(signal, { track })).toEqual({ ok: false, reason: 'network' });
 
+    getMarketQuotes.mockRejectedValue(Object.assign(new Error('bad'), { status: 400 }));
+    expect(await trackSignal(signal, { track })).toEqual({ ok: false, reason: 'bad_symbol' });
+
     getMarketQuotes.mockRejectedValue(new DOMException('aborted', 'AbortError'));
     expect(await trackSignal(signal, { track })).toEqual({ ok: false, reason: 'aborted' });
     expect(track).not.toHaveBeenCalled();

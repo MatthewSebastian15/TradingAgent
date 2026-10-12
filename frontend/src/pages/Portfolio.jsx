@@ -34,6 +34,7 @@ const SAVE_ERRORS = {
 
 const TRACK_ERRORS = {
   no_price: (ticker) => `No live price for ${ticker}.`,
+  bad_symbol: (ticker) => `${ticker} is not a recognised symbol.`,
   timeout: () => 'The price request timed out. Try again.',
   network: () => 'Could not fetch a live price. Check your connection.',
 };

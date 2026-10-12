@@ -47,6 +47,7 @@ export async function trackSignal(signal, { track = addTracked, signal: abortSig
     entryPrice = await fetchEntryPrice(signal.ticker, { signal: abortSignal });
   } catch (error) {
     if (error?.name === 'AbortError') return { ok: false, reason: 'aborted' };
+    if (error?.status === 400) return { ok: false, reason: 'bad_symbol' };
     return { ok: false, reason: error?.code === 'TIMEOUT' ? 'timeout' : 'network' };
   }
   if (entryPrice === null) return { ok: false, reason: 'no_price' };
