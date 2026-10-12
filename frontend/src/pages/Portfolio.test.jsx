@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -210,5 +210,30 @@ describe('Portfolio page', () => {
     render(<Portfolio />);
 
     expect(await screen.findByText('MSFT')).toBeTruthy();
+  });
+
+  it('passes the analysis stop-loss and take-profit into the tracked record', async () => {
+    const { fetchAnalysisHistory } = await import('../utils/analysisHistoryApi');
+    const { getMarketQuotes } = await import('../api/market');
+    fetchAnalysisHistory.mockResolvedValueOnce([
+      { request_id: 'r9', ticker: 'NVDA', decision: 'BUY', stop_loss: 90, take_profit: 130 },
+    ]);
+    getMarketQuotes.mockResolvedValueOnce({ quotes: [{ sym: 'NVDA', price: 100 }] });
+    const track = vi.fn(async () => ({ ok: true }));
+    usePortfolioStore.mockImplementation(() => ({
+      tracked: [],
+      trackedIds: new Set(),
+      track,
+      untrack: vi.fn(),
+    }));
+
+    render(<Portfolio />);
+    fireEvent.click(await screen.findByLabelText('Track NVDA'));
+
+    await waitFor(() =>
+      expect(track).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'r9', entry_price: 100, stop_loss: 90, take_profit: 130 })
+      )
+    );
   });
 });

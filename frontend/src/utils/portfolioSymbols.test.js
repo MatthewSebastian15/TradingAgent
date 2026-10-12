@@ -23,4 +23,9 @@ describe('symbolsForTab', () => {
   it('returns an empty list when nothing is passed', () => {
     expect(symbolsForTab('ai')).toEqual([]);
   });
+
+  it('does not price closed tracked positions', () => {
+    const tracked = [{ ticker: 'AAPL' }, { ticker: 'NVDA', closed_at: '2026-01-01T00:00:00Z' }];
+    expect(symbolsForTab('ai', { tracked })).toEqual(['AAPL']);
+  });
 });

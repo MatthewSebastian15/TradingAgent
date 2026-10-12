@@ -4,8 +4,10 @@ import { useStoredList } from './useStoredList';
 import {
   addTracked,
   clearTracked,
+  closeTracked,
   readTrackedDetailed,
   removeTracked,
+  reopenTracked,
   TRACKED_STORAGE_KEY,
 } from '../services/portfolioStore';
 
@@ -17,6 +19,8 @@ export function usePortfolioStore() {
 
   const track = useCallback((record) => run(() => addTracked(record)), [run]);
   const untrack = useCallback((id) => run(() => removeTracked(id)), [run]);
+  const close = useCallback((id, exitPrice) => run(() => closeTracked(id, exitPrice)), [run]);
+  const reopen = useCallback((id) => run(() => reopenTracked(id)), [run]);
   const resetUnreadable = useCallback(() => run(clearTracked), [run]);
   const trackedIds = useMemo(() => new Set(items.map((entry) => entry.id)), [items]);
 
@@ -27,6 +31,8 @@ export function usePortfolioStore() {
     storageStatus,
     track,
     untrack,
+    close,
+    reopen,
     resetUnreadable,
     retryRead: refresh,
     dismissStorageError,

@@ -116,6 +116,8 @@ export default function Portfolio() {
           entry_at: new Date().toISOString(),
           analysis_created_at: signal.analysis_created_at,
           trade_date: signal.trade_date,
+          stop_loss: signal.stop_loss,
+          take_profit: signal.take_profit,
         });
         if (saved?.ok === false) {
           throw new Error(SAVE_ERRORS[saved.reason] || SAVE_ERRORS.invalid);

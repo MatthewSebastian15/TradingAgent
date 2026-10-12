@@ -2,13 +2,21 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { usePortfolioStore } from './usePortfolioStore';
-import { addTracked, readTrackedDetailed, removeTracked } from '../services/portfolioStore';
+import {
+  addTracked,
+  closeTracked,
+  readTrackedDetailed,
+  removeTracked,
+  reopenTracked,
+} from '../services/portfolioStore';
 
 vi.mock('../services/portfolioStore', () => ({
   addTracked: vi.fn(),
   readTrackedDetailed: vi.fn(),
   removeTracked: vi.fn(),
   clearTracked: vi.fn(),
+  closeTracked: vi.fn(),
+  reopenTracked: vi.fn(),
   TRACKED_STORAGE_KEY: 'portfolio_tracked_v1',
 }));
 
@@ -19,6 +27,8 @@ describe('usePortfolioStore', () => {
     readTrackedDetailed.mockResolvedValue(ok([]));
     addTracked.mockResolvedValue({ ok: true });
     removeTracked.mockResolvedValue({ ok: true });
+    closeTracked.mockResolvedValue({ ok: true });
+    reopenTracked.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -69,5 +79,16 @@ describe('usePortfolioStore', () => {
     readTrackedDetailed.mockResolvedValue({ items: [], status: 'empty' });
     await act(() => result.current.resetUnreadable());
     expect(result.current.storageStatus).toBe('ok');
+  });
+
+  it('close and reopen call the store then refresh', async () => {
+    const { result } = renderHook(() => usePortfolioStore());
+    await waitFor(() => expect(result.current.hydrated).toBe(true));
+
+    await act(() => result.current.close('a1', 123));
+    expect(closeTracked).toHaveBeenCalledWith('a1', 123);
+
+    await act(() => result.current.reopen('a1'));
+    expect(reopenTracked).toHaveBeenCalledWith('a1');
   });
 });
