@@ -200,4 +200,15 @@ describe('Portfolio page', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/ambiguous/);
     expect(add).not.toHaveBeenCalled();
   });
+
+  it('does not block the signals sidebar on the network when a saved list exists', async () => {
+    const { readHistory } = await import('../hooks/useAnalysisHistoryStore');
+    const { fetchAnalysisHistory } = await import('../utils/analysisHistoryApi');
+    readHistory.mockResolvedValueOnce([{ request_id: 'saved', ticker: 'MSFT', decision: 'BUY' }]);
+    fetchAnalysisHistory.mockImplementationOnce(() => new Promise(() => {})); // never answers
+
+    render(<Portfolio />);
+
+    expect(await screen.findByText('MSFT')).toBeTruthy();
+  });
 });

@@ -10,7 +10,16 @@ function shortDate(value) {
   return Number.isFinite(date.getTime()) ? date.toISOString().slice(0, 10) : '-';
 }
 
-export default function SignalsSidebar({ signals, trackedIds, trackingId, error, onTrack }) {
+export default function SignalsSidebar({
+  signals,
+  trackedIds,
+  trackingId,
+  error,
+  onTrack,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}) {
   return (
     <aside
       className={`fixed bottom-0 right-0 top-[60px] z-30 flex ${SIDEBAR_EXPANDED_WIDTH} flex-col border-l border-bloomberg-border bg-black font-mono text-bloomberg-white`}
@@ -82,6 +91,16 @@ export default function SignalsSidebar({ signals, trackedIds, trackingId, error,
             );
           })
         )}
+        {hasMore && (
+          <button
+            type="button"
+            onClick={onLoadMore}
+            disabled={loadingMore}
+            className="w-full border-t border-bloomberg-border py-2 font-mono text-[10px] font-bold uppercase tracking-wider text-bloomberg-orange hover:bg-bloomberg-surface/40 disabled:opacity-50"
+          >
+            {loadingMore ? 'Loading...' : 'Load more'}
+          </button>
+        )}
       </div>
     </aside>
   );
@@ -93,4 +112,7 @@ SignalsSidebar.propTypes = {
   trackingId: PropTypes.string,
   error: PropTypes.string,
   onTrack: PropTypes.func.isRequired,
+  hasMore: PropTypes.bool,
+  loadingMore: PropTypes.bool,
+  onLoadMore: PropTypes.func,
 };

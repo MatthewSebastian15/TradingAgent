@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 
 import { getMarketQuotes } from '../api/market';
 import HoldingsSummaryBar from '../components/portfolio/HoldingsSummaryBar';
@@ -6,16 +6,10 @@ import HoldingsTable from '../components/portfolio/HoldingsTable';
 import PortfolioSummaryBar from '../components/portfolio/PortfolioSummaryBar';
 import SignalsSidebar from '../components/portfolio/SignalsSidebar';
 import TrackedPositionsTable from '../components/portfolio/TrackedPositionsTable';
-import {
-  historyResourceId,
-  normalizeBackendHistory,
-  readHistory,
-  writeHistory,
-} from '../hooks/useAnalysisHistoryStore';
 import { useHoldingsStore } from '../hooks/useHoldingsStore';
 import { usePortfolioStore } from '../hooks/usePortfolioStore';
+import { useSignalsFeed } from '../hooks/useSignalsFeed';
 import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
-import { fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { resolveCurrency } from '../utils/currency';
 import { summarizeByCurrency } from '../utils/holdingsPerf';
 import { validateHoldingInput } from '../utils/holdingsValidation';
@@ -23,8 +17,6 @@ import { summarize } from '../utils/portfolioPerf';
 import { symbolsForTab } from '../utils/portfolioSymbols';
 import { toPrice } from '../utils/price';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
-
-const HISTORY_KEY = 'ta_analysis_history';
 
 const TABS = [
   { id: 'ai', label: 'AI Tracker' },
@@ -40,56 +32,14 @@ const SAVE_ERRORS = {
   not_found: 'That lot no longer exists.',
 };
 
-function toSignal(entry) {
-  const id = historyResourceId(entry);
-  if (!id || !entry.ticker) return null;
-  return {
-    id,
-    ticker: entry.ticker,
-    market: entry.market,
-    decision: entry.decision || entry.display_signal,
-    display_signal: entry.display_signal,
-    confidence_score: entry.confidence_score,
-    confidence_tier: entry.confidence_tier,
-    time_horizon_months: entry.time_horizon_months,
-    analysis_created_at: entry.analysis_created_at,
-    trade_date: entry.trade_date,
-  };
-}
-
 export default function Portfolio() {
   const { tracked, trackedIds, track, untrack } = usePortfolioStore();
   const { holdings, pending, add: addHolding, remove: removeHolding } = useHoldingsStore();
   const [tab, setTab] = useState('ai');
-  const [signals, setSignals] = useState([]);
+  const feed = useSignalsFeed();
   const [trackingId, setTrackingId] = useState(null);
   const [error, setError] = useState('');
   const [holdingsError, setHoldingsError] = useState('');
-
-  useEffect(() => {
-    // Backend `analyses` is authoritative; localStorage is its offline mirror.
-    // Match HistoryPanel: fetch backend, refresh the mirror, fall back on failure.
-    let alive = true;
-    const controller = new AbortController();
-    const apply = (entries) => alive && setSignals(entries.map(toSignal).filter(Boolean));
-
-    fetchAnalysisHistory({ limit: 25, signal: controller.signal })
-      .then(async (data) => {
-        if (controller.signal.aborted) return;
-        const items = normalizeBackendHistory(data);
-        await writeHistory(HISTORY_KEY, items);
-        apply(items);
-      })
-      .catch(async (error) => {
-        if (error.name === 'AbortError') return;
-        apply(await readHistory(HISTORY_KEY));
-      });
-
-    return () => {
-      alive = false;
-      controller.abort();
-    };
-  }, []);
 
   const symbols = useMemo(
     () => symbolsForTab(tab, { tracked, holdings }),
@@ -256,11 +206,14 @@ export default function Portfolio() {
 
       {showSidebar && (
         <SignalsSidebar
-          signals={signals}
+          signals={feed.signals}
           trackedIds={trackedIds}
           trackingId={trackingId}
-          error={error}
+          error={feed.error || error}
           onTrack={handleTrack}
+          hasMore={feed.hasMore}
+          loadingMore={feed.loadingMore}
+          onLoadMore={feed.loadMore}
         />
       )}
     </div>

@@ -65,4 +65,21 @@ describe('SignalsSidebar', () => {
 
     expect(screen.getByRole('alert').textContent).toBe('No live price for NVDA.');
   });
+
+  it('shows Load more only when more pages exist and fires the handler', () => {
+    const onLoadMore = vi.fn();
+    renderSidebar({ hasMore: true, onLoadMore });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(onLoadMore).toHaveBeenCalledTimes(1);
+    cleanup();
+
+    renderSidebar({ hasMore: false });
+    expect(screen.queryByRole('button', { name: 'Load more' })).toBeNull();
+  });
+
+  it('disables Load more while a page is loading', () => {
+    renderSidebar({ hasMore: true, loadingMore: true, onLoadMore: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Loading...' }).disabled).toBe(true);
+  });
 });
