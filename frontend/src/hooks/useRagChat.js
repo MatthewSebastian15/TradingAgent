@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { getMarketQuotes } from '../api/market';
 import { fetchRagChat } from '../api/ragChat';
 import { loadConversations, saveConversations, titleFrom } from '../services/chatHistory';
 import { readHoldings } from '../services/holdingsStore';
 import { readWatchlistState } from '../services/watchlistStorage';
 import { buildApiUrl } from '../utils/api';
+import { fetchInBatches } from '../utils/marketBatch';
 
 function makeId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
@@ -48,30 +50,28 @@ async function buildWatchlistContext(contextFilter, signal) {
 }
 
 // Holdings live in localStorage only (no backend persistence), so the browser
-// ships them as context — same pattern as the watchlist.
-async function buildPortfolioContext(contextFilter, signal) {
+// ships them as context. Only the fields the backend reads are sent.
+export async function buildPortfolioContext(contextFilter, signal) {
   if (contextFilter !== 'all' && contextFilter !== 'portfolio') return null;
 
-  const holdings = await readHoldings();
-  if (!holdings.length) return null;
+  const stored = await readHoldings();
+  if (!stored.length) return null;
 
-  const symbols = holdings.map((h) => h.ticker);
-  let quotes = [];
+  const holdings = stored.map(({ ticker, shares, cost_basis }) => ({ ticker, shares, cost_basis }));
+  const symbols = Array.from(
+    new Set(holdings.map((holding) => String(holding.ticker).trim().toUpperCase()).filter(Boolean))
+  );
+
+  const quotes = [];
   try {
-    const res = await fetch(buildApiUrl(`/market/quotes?symbols=${symbols.join(',')}`), {
-      credentials: 'include',
-      signal,
+    await fetchInBatches(symbols, (batch) => getMarketQuotes(batch, { signal }), {
+      onBatch: (data) => quotes.push(...(Array.isArray(data?.quotes) ? data.quotes : [])),
     });
-    if (res.ok) quotes = await res.json();
   } catch {
-    // non-fatal; send holdings without quotes
+    // non-fatal; send holdings with whatever quotes arrived
   }
 
-  return {
-    holdings,
-    quotes: Array.isArray(quotes) ? quotes : [],
-    fetched_at: new Date().toISOString(),
-  };
+  return { holdings, quotes, fetched_at: new Date().toISOString() };
 }
 
 export function useRagChat(contextFilter = 'all') {
