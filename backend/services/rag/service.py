@@ -455,8 +455,10 @@ def _format_portfolio_context(
             else None
         )  # noqa: E501
         pnl_pct = (pnl / cost_value * 100) if pnl is not None and cost_value else None
+        currency = q.get("currency")
+        currency_part = f" | currency={currency}" if currency else ""
         line = (
-            f"[PORTFOLIO] {ticker} | shares={shares} | cost_basis={cost} | price={price if price is not None else 'N/A'} | "  # noqa: E501
+            f"[PORTFOLIO] {ticker} | shares={shares} | cost_basis={cost} | price={price if price is not None else 'N/A'}{currency_part} | "  # noqa: E501
             f"market_value={round(market_value, 2) if market_value is not None else 'N/A'} | "
             f"pnl={round(pnl, 2) if pnl is not None else 'N/A'} | pnl_percent={round(pnl_pct, 2) if pnl_pct is not None else 'N/A'}%"  # noqa: E501
         )

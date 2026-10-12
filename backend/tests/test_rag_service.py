@@ -419,3 +419,37 @@ async def test_build_context_ticker_news_section():
     assert "=== TICKER NEWS DATA (NVDA) ===" in context
     assert "NVDA hits new high" in context
     assert any(s["type"] == "news" for s in sources)
+
+
+@pytest.mark.asyncio
+async def test_build_context_portfolio_prints_the_quote_currency():
+    from services.rag.service import build_context
+
+    portfolio_ctx = {
+        "holdings": [{"ticker": "BBCA.JK", "shares": 100, "cost_basis": 9000}],
+        "quotes": [{"sym": "BBCA.JK", "price": 9500, "currency": "IDR"}],
+        "fetched_at": "2026-06-29T00:00:00Z",
+    }
+    context, _ = await build_context(
+        "portfolio pnl", ["portfolio"], portfolio_context=portfolio_ctx
+    )
+
+    assert "price=9500 | currency=IDR | " in context
+    assert "pnl=50000 " in context  # (9500-9000)*100
+
+
+@pytest.mark.asyncio
+async def test_build_context_portfolio_without_currency_keeps_the_old_line():
+    from services.rag.service import build_context
+
+    portfolio_ctx = {
+        "holdings": [{"ticker": "AAPL", "shares": 10, "cost_basis": 100}],
+        "quotes": [{"sym": "AAPL", "price": 150}],
+        "fetched_at": "2026-06-29T00:00:00Z",
+    }
+    context, _ = await build_context(
+        "portfolio pnl", ["portfolio"], portfolio_context=portfolio_ctx
+    )
+
+    assert "price=150 | market_value=" in context
+    assert "currency=" not in context
