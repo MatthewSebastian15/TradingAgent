@@ -9,7 +9,13 @@ from helpers import install_analysis_runtime
 
 from core.cache.analysis_cache import AnalysisJobStore
 from core.errors import RateLimitError
-from core.security.rate_limiter import RateLimitLease, RateLimitPolicy, SQLiteRateLimiterBackend
+from core.security.rate_limiter import (
+    MemoryRateLimiterBackend,
+    RateLimiterState,
+    RateLimitLease,
+    RateLimitPolicy,
+    SQLiteRateLimiterBackend,
+)
 
 
 def test_ticker_validate_is_rate_limited(client, monkeypatch):
@@ -249,6 +255,60 @@ def test_sqlite_stream_limiter_evicts_stale_active_lease(tmp_path):
             (policy.scope, "owner-a"),
         ).fetchone()[0]
     assert active == 1
+
+
+def _age_sqlite_leases(db_path, scope: str, age_seconds: float) -> None:
+    with sqlite3.connect(db_path) as conn:
+        conn.execute(
+            "UPDATE rate_limit_buckets SET last_seen = last_seen - ? WHERE scope = ?",
+            (age_seconds, scope),
+        )
+
+
+def test_sqlite_non_stream_limiter_evicts_leaked_active_lease(tmp_path):
+    db_path = tmp_path / "rate_limits.sqlite3"
+    backend = SQLiteRateLimiterBackend(str(db_path), ttl_seconds=60)
+    policy = RateLimitPolicy(scope="analysis-read", max_per_minute=100, max_concurrent=1)
+
+    asyncio.run(backend.acquire("owner-a", policy))  # never released: the server was killed
+    _age_sqlite_leases(db_path, policy.scope, 601)
+
+    asyncio.run(backend.acquire("owner-a", policy))
+
+
+def test_sqlite_non_stream_limiter_keeps_recent_active_lease(tmp_path):
+    db_path = tmp_path / "rate_limits.sqlite3"
+    backend = SQLiteRateLimiterBackend(str(db_path), ttl_seconds=60)
+    policy = RateLimitPolicy(scope="analysis-read", max_per_minute=100, max_concurrent=1)
+
+    asyncio.run(backend.acquire("owner-a", policy))
+    _age_sqlite_leases(db_path, policy.scope, 300)  # past idle TTL, inside the lease TTL
+
+    with pytest.raises(RateLimitError):
+        asyncio.run(backend.acquire("owner-a", policy))
+
+
+def test_memory_non_stream_limiter_evicts_leaked_active_lease():
+    state = RateLimiterState()
+    backend = MemoryRateLimiterBackend(state)
+    policy = RateLimitPolicy(scope="analysis-read", max_per_minute=100, max_concurrent=1)
+
+    asyncio.run(backend.acquire("owner-a", policy))
+    state.states[(policy.scope, "owner-a")].last_seen -= 601
+
+    asyncio.run(backend.acquire("owner-a", policy))
+
+
+def test_memory_non_stream_limiter_keeps_recent_active_lease():
+    state = RateLimiterState()
+    backend = MemoryRateLimiterBackend(state)
+    policy = RateLimitPolicy(scope="analysis-read", max_per_minute=100, max_concurrent=1)
+
+    asyncio.run(backend.acquire("owner-a", policy))
+    state.states[(policy.scope, "owner-a")].last_seen -= 300
+
+    with pytest.raises(RateLimitError):
+        asyncio.run(backend.acquire("owner-a", policy))
 
 
 def test_market_quotes_endpoint_is_rate_limited(client, monkeypatch):

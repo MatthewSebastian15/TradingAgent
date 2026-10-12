@@ -33,6 +33,9 @@ from core.security.owner_session import OWNER_SESSION_COOKIE_NAME, owner_identif
 
 # Idle slots older than this are eligible for eviction.
 _TTL_SECONDS = 120
+# A held lease older than this is treated as leaked (e.g. the server was killed mid-request).
+# Long requests keep theirs alive through touch(), so this must exceed any untouched request.
+_ACTIVE_LEASE_TTL_SECONDS = 600
 
 _WRITE_LOCKS: dict[Path, threading.RLock] = {}
 _WRITE_LOCKS_GUARD = threading.Lock()
@@ -240,8 +243,13 @@ class SQLiteRateLimiterBackend:
             DELETE FROM rate_limit_buckets
             WHERE (active <= 0 AND last_seen < ?)
                OR (scope = 'stream' AND active > 0 AND last_seen < ?)
+               OR (active > 0 AND last_seen < ?)
             """,
-            (now - self.ttl_seconds, now - self.ttl_seconds),
+            (
+                now - self.ttl_seconds,
+                now - self.ttl_seconds,
+                now - max(self.ttl_seconds, _ACTIVE_LEASE_TTL_SECONDS),
+            ),
         )
 
 
@@ -307,8 +315,11 @@ def _evict_stale_entries(now: float, limiter_state: RateLimiterState) -> None:
     stale = [
         key
         for key, state in limiter_state.states.items()
-        if (now - state.last_seen) > limiter_state.ttl_seconds
-        and (state.active == 0 or (key[0] == "stream" and state.active > 0))
+        if (
+            (now - state.last_seen) > limiter_state.ttl_seconds
+            and (state.active == 0 or (key[0] == "stream" and state.active > 0))
+        )
+        or (now - state.last_seen) > max(limiter_state.ttl_seconds, _ACTIVE_LEASE_TTL_SECONDS)
     ]
     for key in stale:
         del limiter_state.states[key]
