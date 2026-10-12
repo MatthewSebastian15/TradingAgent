@@ -179,9 +179,11 @@ class PostgresAnalysisRepository:
         *,
         ticker: str | None = None,
         limit: int = 25,
+        offset: int = 0,
         owner_id: str | None = None,
     ) -> list[dict[str, Any]]:
         safe_limit = max(1, min(int(limit), 100))
+        safe_offset = max(0, int(offset))
         params: list[Any] = []
         filters: list[str] = []
         if owner_id is not None:
@@ -192,6 +194,7 @@ class PostgresAnalysisRepository:
             params.append(ticker.strip().upper())
         where = f"WHERE {' AND '.join(filters)}" if filters else ""
         params.append(safe_limit)
+        params.append(safe_offset)
 
         with self._connect() as conn:
             rows = conn.execute(
@@ -206,7 +209,7 @@ class PostgresAnalysisRepository:
                 FROM analyses
                 {where}
                 ORDER BY created_at DESC, request_id DESC
-                LIMIT %s
+                LIMIT %s OFFSET %s
                 """,
                 params,
             ).fetchall()

@@ -164,3 +164,20 @@ def test_repository_requires_owner_scope(repository):
         repository.save_analysis(result=_result(), owner_id="")
     with pytest.raises(ValueError):
         repository.list_analyses(owner_id="")
+
+
+def test_repository_list_offset_pages_without_overlap(repository):
+    for index in range(3):
+        repository.save_analysis(
+            result=_result(f"req-{index}", analysis_created_at=f"2026-05-2{index}T08:00:00+00:00"),
+            owner_id=_TEST_OWNER,
+        )
+
+    def ids(**kwargs):
+        return [
+            item["request_id"] for item in repository.list_analyses(owner_id=_TEST_OWNER, **kwargs)
+        ]
+
+    assert ids(limit=2, offset=0) == ["req-2", "req-1"]
+    assert ids(limit=2, offset=2) == ["req-0"]
+    assert ids(limit=2, offset=5) == []
