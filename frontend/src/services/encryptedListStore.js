@@ -73,7 +73,8 @@ export function createEncryptedListStore({ key, normalize }) {
     return { items: [], status: looksEncrypted(raw) ? 'unreadable' : 'corrupt' };
   }
 
-  // update(items) returns the next array, or a falsy value to signal "invalid input".
+  // update(items) returns the next array, a falsy value for "invalid input", or
+  // { reason } to refuse the change with a specific reason (e.g. 'limit').
   function mutate(update) {
     return enqueue(async () => {
       const { items, status } = await readDetailed();
@@ -83,6 +84,7 @@ export function createEncryptedListStore({ key, normalize }) {
       }
       const next = update(items);
       if (!next) return { ok: false, reason: 'invalid' };
+      if (!Array.isArray(next)) return { ok: false, reason: next.reason || 'invalid' };
 
       const clean = next.map(normalize).filter(Boolean);
       try {

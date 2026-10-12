@@ -135,4 +135,15 @@ describe('encryptedListStore', () => {
     expect(listener.mock.calls[0][0].detail).toEqual({ key: KEY });
     window.removeEventListener(STORAGE_UPDATED_EVENT, listener);
   });
+
+  it('propagates a custom failure reason without writing', async () => {
+    await store.mutate(add('a'));
+    const before = localStorage.getItem(KEY);
+
+    expect(await store.mutate(() => ({ reason: 'limit' }))).toEqual({
+      ok: false,
+      reason: 'limit',
+    });
+    expect(localStorage.getItem(KEY)).toBe(before);
+  });
 });
