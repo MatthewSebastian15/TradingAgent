@@ -25,12 +25,15 @@ async def list_analysis_history(
     request: Request,
     ticker: str | None = None,
     limit: int = Query(default=ANALYSIS_HISTORY_DEFAULT_LIMIT, ge=1, le=100),
+    offset: int = Query(default=0, ge=0, le=10_000),
 ):
     """Return global analysis history metadata for this personal app."""
 
     async with limit_request(request, analysis_read_policy()):
         repository = get_analysis_repository()
-        items = await asyncio.to_thread(repository.list_analyses, ticker=ticker, limit=limit)
+        items = await asyncio.to_thread(
+            repository.list_analyses, ticker=ticker, limit=limit, offset=offset
+        )
         return {"items": items}
 
 

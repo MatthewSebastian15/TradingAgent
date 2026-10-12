@@ -108,3 +108,22 @@ def test_history_detail_and_delete_return_404_for_unknown_result(client):
     assert detail.json()["error"]["code"] == "NOT_FOUND"
     assert deleted.status_code == 404
     assert deleted.json()["error"]["code"] == "NOT_FOUND"
+
+
+def test_history_offset_pages_and_validates(client, analysis_repository):
+    for index in range(3):
+        analysis_repository.save_analysis(
+            result={
+                **_result(f"req-{index}", "AAPL"),
+                "analysis_created_at": f"2026-05-2{index}T08:00:00+00:00",
+            },
+            owner_id=_TEST_OWNER_IDENTIFIER,
+        )
+
+    first = client.get("/api/analysis/history", params={"limit": 2}).json()["items"]
+    second = client.get("/api/analysis/history", params={"limit": 2, "offset": 2}).json()["items"]
+
+    assert [item["request_id"] for item in first] == ["req-2", "req-1"]
+    assert [item["request_id"] for item in second] == ["req-0"]
+    assert client.get("/api/analysis/history", params={"offset": -1}).status_code in (400, 422)
+    assert client.get("/api/analysis/history", params={"offset": 10_001}).status_code in (400, 422)

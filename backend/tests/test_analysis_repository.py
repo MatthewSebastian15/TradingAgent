@@ -141,3 +141,38 @@ def test_repository_schema_owner_id_is_not_nullable(tmp_path):
     assert int(owner_column["notnull"]) == 1
     assert "idx_analyses_owner_created_at" in indexes
     assert "idx_analyses_owner_request_id" in indexes
+
+
+def test_repository_list_offset_pages_without_overlap(tmp_path):
+    repository = AnalysisRepository(str(tmp_path / "analysis.sqlite3"), max_rows=10)
+    for index in range(3):
+        repository.save_analysis(
+            result=_result(f"req-{index}", analysis_created_at=f"2026-05-2{index}T08:00:00+00:00"),
+            owner_id=_TEST_OWNER,
+        )
+
+    def ids(**kwargs):
+        return [
+            item["request_id"] for item in repository.list_analyses(owner_id=_TEST_OWNER, **kwargs)
+        ]
+
+    assert ids(limit=2, offset=0) == ["req-2", "req-1"]
+    assert ids(limit=2, offset=2) == ["req-0"]
+    assert ids(limit=2, offset=5) == []
+    assert ids(limit=2, offset=-3) == ["req-2", "req-1"]  # negative offsets clamp to 0
+
+
+def test_repository_list_offset_composes_with_ticker_filter(tmp_path):
+    repository = AnalysisRepository(str(tmp_path / "analysis.sqlite3"), max_rows=10)
+    for index in range(3):
+        repository.save_analysis(
+            result=_result(
+                f"aapl-{index}", "AAPL", analysis_created_at=f"2026-05-2{index}T08:00:00+00:00"
+            ),
+            owner_id=_TEST_OWNER,
+        )
+    repository.save_analysis(result=_result("msft-0", "MSFT"), owner_id=_TEST_OWNER)
+
+    page = repository.list_analyses(ticker="aapl", limit=1, offset=1, owner_id=_TEST_OWNER)
+
+    assert [item["request_id"] for item in page] == ["aapl-1"]
