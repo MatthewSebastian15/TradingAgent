@@ -14,6 +14,8 @@ export function toSignal(entry) {
     time_horizon_months: entry.time_horizon_months,
     analysis_created_at: entry.analysis_created_at,
     trade_date: entry.trade_date,
+    stop_loss: entry.stop_loss ?? null,
+    take_profit: entry.take_profit ?? null,
   };
 }
 

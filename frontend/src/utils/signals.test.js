@@ -20,6 +20,14 @@ describe('toSignal', () => {
     });
   });
 
+  it('carries stop-loss and take-profit and defaults them to null', () => {
+    expect(toSignal({ ...base, stop_loss: 90, take_profit: 120 })).toMatchObject({
+      stop_loss: 90,
+      take_profit: 120,
+    });
+    expect(toSignal(base)).toMatchObject({ stop_loss: null, take_profit: null });
+  });
+
   it('uses job_id when there is no request_id', () => {
     expect(toSignal({ job_id: 'j9', ticker: 'AAPL' }).id).toBe('j9');
   });

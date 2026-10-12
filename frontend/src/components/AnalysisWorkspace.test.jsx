@@ -94,6 +94,8 @@ function historySummary(overrides = {}) {
     confidence_score: overrides.confidence_score ?? null,
     confidence_tier: overrides.confidence_tier ?? null,
     time_horizon_months: null,
+    stop_loss: null,
+    take_profit: null,
     analysis_created_at: null,
     saved_at: expect.any(String),
     ...overrides,

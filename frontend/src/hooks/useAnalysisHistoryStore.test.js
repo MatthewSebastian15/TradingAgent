@@ -80,6 +80,26 @@ describe('useAnalysisHistoryStore', () => {
     expect(await readHistory(KEY)).toEqual([]);
   });
 
+  it('keeps stop-loss and take-profit from backend rows and defaults them to null', () => {
+    const [withLevels, without] = normalizeBackendHistory([
+      { request_id: 'r1', ticker: 'AAPL', stop_loss: 178.9, take_profit: '201.3' },
+      { request_id: 'r2', ticker: 'MSFT' },
+    ]);
+
+    expect(withLevels.stop_loss).toBe(178.9);
+    expect(withLevels.take_profit).toBe(201.3);
+    expect(without.stop_loss).toBeNull();
+    expect(without.take_profit).toBeNull();
+  });
+
+  it('treats a zero or negative level as missing', () => {
+    const [item] = normalizeBackendHistory([
+      { request_id: 'r1', ticker: 'AAPL', stop_loss: 0, take_profit: -5 },
+    ]);
+    expect(item.stop_loss).toBeNull();
+    expect(item.take_profit).toBeNull();
+  });
+
   it('normalizeBackendHistory maps created_at fields; helpers behave', () => {
     const createdAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const [normalized] = normalizeBackendHistory([

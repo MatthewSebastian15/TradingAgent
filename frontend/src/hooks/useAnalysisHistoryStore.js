@@ -1,4 +1,5 @@
 import { decryptJSON, encryptJSON } from '../services/secureStorage';
+import { toPrice } from '../utils/price';
 
 const HISTORY_SCHEMA_VERSION = 2;
 const HISTORY_TTL_DAYS = 30;
@@ -103,6 +104,8 @@ function toHistorySummary(entry) {
     confidence_score: normalizeHistoryConfidence(entry.confidence_score),
     confidence_tier: textOrNull(entry.confidence_tier),
     time_horizon_months: [1, 2, 3].includes(horizon) ? horizon : null,
+    stop_loss: toPrice(entry.stop_loss),
+    take_profit: toPrice(entry.take_profit),
     analysis_created_at: textOrNull(entry.analysis_created_at),
     saved_at: textOrNull(entry.saved_at) || new Date().toISOString(),
   };
