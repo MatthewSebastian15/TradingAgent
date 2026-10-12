@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,11 @@ _DEFAULT_ENV = {
     "REQUIRE_API_KEY_FOR_RATE_LIMIT": "false",
     "OWNER_SESSION_SECRET": "test-owner-session-secret",
     "TRADINGAGENTS_SKIP_DOTENV": "true",
+    # Fresh per pytest session: buckets in the dev .cache file outlive a run and
+    # make per-minute limit tests fail when the suite is re-run within 60 seconds.
+    "RATE_LIMIT_DB_PATH": str(
+        Path(tempfile.mkdtemp(prefix="ta-ratelimit-")) / "rate_limits.sqlite3"
+    ),
 }
 
 for key, value in _DEFAULT_ENV.items():
