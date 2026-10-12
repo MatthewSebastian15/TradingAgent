@@ -2,8 +2,10 @@ import { Plus, Trash2 } from 'lucide-react';
 import PropTypes from 'prop-types';
 import React, { useState } from 'react';
 
-import { money, pct, signClass as fmtSignClass } from '../../utils/formatting';
+import { formatMoney } from '../../utils/currency';
+import { pct, signClass as fmtSignClass } from '../../utils/formatting';
 import { positionStats } from '../../utils/holdingsPerf';
+import { toPrice } from '../../utils/price';
 import { formatChangePercent } from '../../utils/watchlistFormatters';
 import WatchlistTrendBars from '../watchlist/WatchlistTrendBars';
 
@@ -87,7 +89,14 @@ AddHoldingForm.propTypes = {
   busy: PropTypes.bool,
 };
 
-export default function HoldingsTable({ rows, totalValue, onAdd, onRemove, error, busy }) {
+export default function HoldingsTable({
+  rows,
+  totalsByCurrency = {},
+  onAdd,
+  onRemove,
+  error,
+  busy,
+}) {
   return (
     <div className="border border-bloomberg-border bg-bloomberg-card">
       <AddHoldingForm onAdd={onAdd} busy={busy} />
@@ -121,12 +130,12 @@ export default function HoldingsTable({ rows, totalValue, onAdd, onRemove, error
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ holding, price, chg, trend }) => {
+              {rows.map(({ holding, price, chg, trend, currency = 'USD' }) => {
                 const s = positionStats(holding, price, chg);
+                const total = totalsByCurrency[currency];
                 const weight =
-                  s.value !== null && Number.isFinite(totalValue) && totalValue > 0
-                    ? s.value / totalValue
-                    : null;
+                  s.value !== null && Number.isFinite(total) && total > 0 ? s.value / total : null;
+                const money = (value, options) => formatMoney(value, currency, options);
                 return (
                   <tr
                     key={holding.id}
@@ -134,16 +143,18 @@ export default function HoldingsTable({ rows, totalValue, onAdd, onRemove, error
                   >
                     <td className="px-3 py-2 font-bold text-bloomberg-orange">{holding.ticker}</td>
                     <td className="px-3 py-2 text-right text-bloomberg-white">{holding.shares}</td>
-                    <td className="px-3 py-2 text-right text-bloomberg-muted">
+                    <td className="px-3 py-2 text-right text-bloomberg-white/60">
                       {money(holding.cost_basis)}
                     </td>
-                    <td className="px-3 py-2 text-right text-bloomberg-white">{money(price)}</td>
+                    <td className="px-3 py-2 text-right text-bloomberg-white">
+                      {money(toPrice(price))}
+                    </td>
                     <td className={`px-3 py-2 text-right ${signClass(s.dayPL)}`}>
                       {formatChangePercent(chg)}
                     </td>
                     <td className="px-3 py-2 text-right text-bloomberg-white">{money(s.value)}</td>
                     <td className={`px-3 py-2 text-right font-bold ${signClass(s.pl)}`}>
-                      {s.pl === null ? '-' : `${money(s.pl)} / ${pct(s.plPct)}`}
+                      {s.pl === null ? '-' : `${money(s.pl, { signed: true })} / ${pct(s.plPct)}`}
                     </td>
                     <td className="px-3 py-2 text-right text-bloomberg-muted">
                       {weight === null ? '-' : `${(weight * 100).toFixed(1)}%`}
@@ -184,9 +195,10 @@ HoldingsTable.propTypes = {
       price: PropTypes.number,
       chg: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
       trend: PropTypes.arrayOf(PropTypes.number),
+      currency: PropTypes.string,
     })
   ).isRequired,
-  totalValue: PropTypes.number,
+  totalsByCurrency: PropTypes.objectOf(PropTypes.number),
   onAdd: PropTypes.func.isRequired,
   onRemove: PropTypes.func.isRequired,
   error: PropTypes.string,

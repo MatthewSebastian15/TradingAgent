@@ -2,10 +2,12 @@ import React, { useMemo } from 'react';
 
 import { useHoldingsStore } from '../../hooks/useHoldingsStore';
 import { useWatchlistQuotes } from '../../hooks/useWatchlistQuotes';
-import { formatLastPrice, normalizeWatchlistSymbol } from '../../utils/watchlistFormatters';
+import { formatMoney, resolveCurrency } from '../../utils/currency';
+import { toPrice } from '../../utils/price';
+import { normalizeWatchlistSymbol } from '../../utils/watchlistFormatters';
 
 function plPercent(price, costBasis) {
-  if (!Number.isFinite(price) || !Number.isFinite(costBasis) || costBasis <= 0) return null;
+  if (price === null || !Number.isFinite(costBasis) || costBasis <= 0) return null;
   return ((price - costBasis) / costBasis) * 100;
 }
 
@@ -33,7 +35,7 @@ export default function HomePortfolioSection() {
         <div className="max-h-40 overflow-y-auto">
           {holdings.map((holding) => {
             const quote = quotesBySymbol.get(normalizeWatchlistSymbol(holding.ticker));
-            const price = Number(quote?.price);
+            const price = toPrice(quote?.price);
             const pl = plPercent(price, holding.cost_basis);
             return (
               <div
@@ -45,7 +47,7 @@ export default function HomePortfolioSection() {
                   {holding.shares} sh
                 </span>
                 <span className="text-right font-bold text-bloomberg-white">
-                  {formatLastPrice(quote?.price)}
+                  {formatMoney(price, resolveCurrency(quote, holding.ticker))}
                 </span>
                 <span
                   className={`text-right font-bold ${

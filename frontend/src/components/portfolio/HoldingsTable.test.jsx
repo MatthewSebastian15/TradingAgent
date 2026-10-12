@@ -16,7 +16,9 @@ const ROWS = [
 function renderTable(props = {}) {
   const onAdd = vi.fn(async () => true);
   const onRemove = vi.fn();
-  render(<HoldingsTable rows={[]} totalValue={0} onAdd={onAdd} onRemove={onRemove} {...props} />);
+  render(
+    <HoldingsTable rows={[]} totalsByCurrency={{}} onAdd={onAdd} onRemove={onRemove} {...props} />
+  );
   return { onAdd, onRemove };
 }
 
@@ -33,12 +35,12 @@ describe('HoldingsTable', () => {
   });
 
   it('renders a row with derived value, P/L, and weight', () => {
-    const { onRemove } = renderTable({ rows: ROWS, totalValue: 2400 });
+    const { onRemove } = renderTable({ rows: ROWS, totalsByCurrency: { USD: 2400 } });
 
     expect(screen.getByText('AAPL')).toBeTruthy();
     // 10 shares × 120 = 1,200 market value; +200 P/L; 50% weight of 2,400.
-    expect(screen.getByText('1,200.00')).toBeTruthy();
-    expect(screen.getByText('200.00 / +20.00%')).toBeTruthy();
+    expect(screen.getByText('$1,200.00')).toBeTruthy();
+    expect(screen.getByText('+$200.00 / +20.00%')).toBeTruthy();
     expect(screen.getByText('50.0%')).toBeTruthy();
 
     fireEvent.click(screen.getByLabelText('Remove AAPL'));
@@ -64,5 +66,49 @@ describe('HoldingsTable', () => {
 
     expect(screen.getByRole('alert').textContent).toBe('quota exceeded');
     expect(screen.getByRole('button', { name: /Add/ }).disabled).toBe(true);
+  });
+
+  it('formats each row in its own currency and computes weight within that currency', () => {
+    renderTable({
+      rows: [
+        {
+          holding: { id: 'h1', ticker: 'AAPL', shares: 10, cost_basis: 100 },
+          price: 120,
+          chg: '+1.00%',
+          trend: [],
+          currency: 'USD',
+        },
+        {
+          holding: { id: 'h2', ticker: 'BBCA.JK', shares: 100, cost_basis: 9000 },
+          price: 9500,
+          chg: '+1.00%',
+          trend: [],
+          currency: 'IDR',
+        },
+      ],
+      totalsByCurrency: { USD: 1200, IDR: 950000 },
+    });
+
+    expect(screen.getByText('Rp 950,000')).toBeTruthy(); // market value, no decimals
+    expect(screen.getByText('+Rp 50,000 / +5.56%')).toBeTruthy();
+    expect(screen.getAllByText('100.0%')).toHaveLength(2); // each is the whole of its own currency
+  });
+
+  it('shows dashes, not zeros, for a lot without a live price', () => {
+    renderTable({
+      rows: [
+        {
+          holding: { id: 'h1', ticker: 'AAPL', shares: 10, cost_basis: 100 },
+          price: null,
+          chg: 'N/A',
+          trend: [],
+          currency: 'USD',
+        },
+      ],
+      totalsByCurrency: {},
+    });
+
+    expect(screen.queryByText(/-100\.00%/)).toBeNull();
+    expect(screen.queryByText('$0.00')).toBeNull();
   });
 });
