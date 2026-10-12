@@ -39,6 +39,18 @@ describe('fetchAnalysisHistory', () => {
     expect(globalThis.fetch.mock.calls[0][0]).toBe('/api/analysis/history?limit=25');
   });
 
+  it('adds offset only when positive and keeps the parameter order', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ items: [] }) });
+
+    await fetchAnalysisHistory({ ticker: 'NVDA', limit: 25, offset: 50 });
+    await fetchAnalysisHistory({ limit: 25, offset: 0 });
+
+    expect(globalThis.fetch.mock.calls[0][0]).toBe(
+      '/api/analysis/history?ticker=NVDA&limit=25&offset=50'
+    );
+    expect(globalThis.fetch.mock.calls[1][0]).toBe('/api/analysis/history?limit=25');
+  });
+
   it('returns [] when payload items is not an array', async () => {
     globalThis.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
     expect(await fetchAnalysisHistory()).toEqual([]);

@@ -1,9 +1,10 @@
 import { buildApiUrl, buildAuthHeaders, readHttpError } from './api';
 
-export async function fetchAnalysisHistory({ ticker = '', limit = 25, signal } = {}) {
+export async function fetchAnalysisHistory({ ticker = '', limit = 25, offset = 0, signal } = {}) {
   const params = new URLSearchParams();
   if (ticker) params.set('ticker', ticker);
   params.set('limit', String(limit));
+  if (offset > 0) params.set('offset', String(offset));
 
   const response = await fetch(buildApiUrl(`/analysis/history?${params.toString()}`), {
     method: 'GET',
