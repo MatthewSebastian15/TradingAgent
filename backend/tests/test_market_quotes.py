@@ -71,6 +71,33 @@ def test_market_quotes_cache_keeps_volume(client, monkeypatch):
     assert second.json()["quotes"][0]["volume"] == 1200.0
 
 
+def _quote_calls_after(client, monkeypatch, *, error: bool, wait: float) -> int:
+    market_routes._QUOTE_CACHE.clear()
+    calls = 0
+    clock = [1000.0]
+
+    async def fake_fetch_quotes(symbols):
+        nonlocal calls
+        calls += 1
+        return [{"sym": "AAPL", "chg": "N/A", "pos": True, "price": None, "error": error}]
+
+    monkeypatch.setattr("routes.market._fetch_quotes", fake_fetch_quotes)
+    monkeypatch.setattr("routes.market.monotonic", lambda: clock[0])
+
+    client.get("/api/market/quotes?symbols=AAPL")
+    clock[0] += wait
+    client.get("/api/market/quotes?symbols=AAPL")
+    return calls
+
+
+def test_market_quotes_batch_with_error_is_refetched_after_short_ttl(client, monkeypatch):
+    assert _quote_calls_after(client, monkeypatch, error=True, wait=11) == 2
+
+
+def test_market_quotes_healthy_batch_stays_cached_past_error_ttl(client, monkeypatch):
+    assert _quote_calls_after(client, monkeypatch, error=False, wait=60) == 1
+
+
 def test_fetch_quote_reads_volume_from_fast_info(monkeypatch):
     fake_yf = SimpleNamespace(
         Ticker=lambda _symbol: SimpleNamespace(

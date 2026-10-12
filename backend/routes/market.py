@@ -77,6 +77,8 @@ _DEFAULT_TICKERS: list[str] = [
 ]
 _QUOTE_SYMBOL_RE = re.compile(r"^[A-Z0-9^]{1,15}(?:[.=:-][A-Z0-9]{1,12}){0,3}$")
 _QUOTE_CACHE_TTL_SECONDS = 90.0
+# A batch holding a failed row is retried soon: one Yahoo blip must not stick for 90s.
+_QUOTE_ERROR_CACHE_TTL_SECONDS = 10.0
 _SEARCH_CACHE_TTL_SECONDS = 60.0
 _SPARKLINE_CACHE_TTL_SECONDS = 300.0
 _QUOTE_CACHE: OrderedDict[tuple[str, ...], tuple[float, list[dict]]] = OrderedDict()
@@ -771,7 +773,12 @@ async def get_market_quotes(
     async with _market_data_limit(request):
         cached_at, cached_quotes = _cache_get(_QUOTE_CACHE, cache_key, (0.0, []))
         now = monotonic()
-        if cached_quotes and now - cached_at <= _QUOTE_CACHE_TTL_SECONDS:
+        ttl = (
+            _QUOTE_ERROR_CACHE_TTL_SECONDS
+            if any(quote.get("error") for quote in cached_quotes)
+            else _QUOTE_CACHE_TTL_SECONDS
+        )
+        if cached_quotes and now - cached_at <= ttl:
             return {"quotes": _clone_quotes(cached_quotes)}
         # Slot released here; yfinance fetch happens outside the lease.
 
