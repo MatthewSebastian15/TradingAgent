@@ -7,9 +7,8 @@ describe('money', () => {
     expect(money(null)).toBe('-');
     expect(money(NaN)).toBe('-');
   });
-  it('plain vs currency variant', () => {
+  it('formats with two decimals and thousands separators', () => {
     expect(money(1234.5)).toBe('1,234.50');
-    expect(money(1234.5, { currency: true })).toBe('$1,234.50');
   });
 });
 

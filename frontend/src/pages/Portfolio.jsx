@@ -16,9 +16,11 @@ import { useHoldingsStore } from '../hooks/useHoldingsStore';
 import { usePortfolioStore } from '../hooks/usePortfolioStore';
 import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
 import { fetchAnalysisHistory } from '../utils/analysisHistoryApi';
-import { summarizeHoldings } from '../utils/holdingsPerf';
+import { resolveCurrency } from '../utils/currency';
+import { summarizeByCurrency } from '../utils/holdingsPerf';
 import { summarize } from '../utils/portfolioPerf';
 import { symbolsForTab } from '../utils/portfolioSymbols';
+import { toPrice } from '../utils/price';
 import { normalizeWatchlistSymbol } from '../utils/watchlistFormatters';
 
 const HISTORY_KEY = 'ta_analysis_history';
@@ -94,7 +96,7 @@ export default function Portfolio() {
   const { quotesBySymbol, trendsBySymbol } = useWatchlistQuotes(symbols);
 
   const priceFor = useCallback(
-    (ticker) => Number(quotesBySymbol.get(normalizeWatchlistSymbol(ticker))?.price),
+    (ticker) => toPrice(quotesBySymbol.get(normalizeWatchlistSymbol(ticker))?.price),
     [quotesBySymbol]
   );
 
@@ -104,7 +106,7 @@ export default function Portfolio() {
         const key = normalizeWatchlistSymbol(position.ticker);
         return {
           position,
-          current: Number(quotesBySymbol.get(key)?.price),
+          current: toPrice(quotesBySymbol.get(key)?.price),
           trend: trendsBySymbol.get(key) || [],
         };
       }),
@@ -118,16 +120,21 @@ export default function Portfolio() {
         const quote = quotesBySymbol.get(key);
         return {
           holding,
-          price: Number(quote?.price),
+          price: toPrice(quote?.price),
           chg: quote?.chg,
           trend: trendsBySymbol.get(key) || [],
+          currency: resolveCurrency(quote, holding.ticker),
         };
       }),
     [holdings, quotesBySymbol, trendsBySymbol]
   );
 
   const summary = useMemo(() => summarize(tracked, priceFor), [tracked, priceFor]);
-  const holdingsSummary = useMemo(() => summarizeHoldings(holdingRows), [holdingRows]);
+  const holdingsSummaries = useMemo(() => summarizeByCurrency(holdingRows), [holdingRows]);
+  const totalsByCurrency = useMemo(
+    () => Object.fromEntries(holdingsSummaries.map((item) => [item.currency, item.totalValue])),
+    [holdingsSummaries]
+  );
 
   const handleTrack = useCallback(
     async (signal) => {
@@ -238,10 +245,10 @@ export default function Portfolio() {
           </>
         ) : (
           <>
-            <HoldingsSummaryBar summary={holdingsSummary} />
+            <HoldingsSummaryBar summaries={holdingsSummaries} />
             <HoldingsTable
               rows={holdingRows}
-              totalValue={holdingsSummary.totalValue}
+              totalsByCurrency={totalsByCurrency}
               onAdd={handleAddHolding}
               onRemove={removeHolding}
               error={holdingsError}

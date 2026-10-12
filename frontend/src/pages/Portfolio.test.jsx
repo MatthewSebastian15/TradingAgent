@@ -55,6 +55,10 @@ describe('Portfolio page', () => {
       untrack: vi.fn(),
     }));
     useHoldingsStore.mockImplementation(() => ({ holdings: [], add: vi.fn(), remove: vi.fn() }));
+    useWatchlistQuotes.mockImplementation(() => ({
+      quotesBySymbol: new Map(),
+      trendsBySymbol: new Map(),
+    }));
   });
 
   it('renders the AI tracker tab with signals from history', async () => {
@@ -116,5 +120,24 @@ describe('Portfolio page', () => {
 
     expect((await screen.findByRole('alert')).textContent).toMatch(/storage is full or blocked/i);
     expect(screen.getByLabelText('Ticker').value).toBe('AAPL'); // form kept so nothing is lost
+  });
+
+  it('does not show a failed quote as a total loss', async () => {
+    useHoldingsStore.mockImplementation(() => ({
+      holdings: [{ id: 'h1', ticker: 'AAPL', shares: 10, cost_basis: 100 }],
+      add: vi.fn(),
+      remove: vi.fn(),
+    }));
+    useWatchlistQuotes.mockImplementation(() => ({
+      quotesBySymbol: new Map([['AAPL', { sym: 'AAPL', price: null, chg: 'N/A', error: true }]]),
+      trendsBySymbol: new Map(),
+    }));
+
+    render(<Portfolio />);
+    await screen.findByText('NVDA');
+    fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
+
+    expect(screen.queryByText(/-100\.00%/)).toBeNull();
+    expect(screen.getByText('1 unpriced')).toBeTruthy();
   });
 });
