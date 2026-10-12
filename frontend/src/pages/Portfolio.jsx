@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 
-import { getMarketQuotes } from '../api/market';
 import HoldingsSummaryBar from '../components/portfolio/HoldingsSummaryBar';
 import HoldingsTable from '../components/portfolio/HoldingsTable';
 import PortfolioSummaryBar from '../components/portfolio/PortfolioSummaryBar';
@@ -10,6 +9,7 @@ import { useHoldingsStore } from '../hooks/useHoldingsStore';
 import { usePortfolioStore } from '../hooks/usePortfolioStore';
 import { useSignalsFeed } from '../hooks/useSignalsFeed';
 import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
+import { trackSignal } from '../services/trackSignal';
 import { resolveCurrency } from '../utils/currency';
 import { summarizeByCurrency } from '../utils/holdingsPerf';
 import { validateHoldingInput } from '../utils/holdingsValidation';
@@ -30,6 +30,12 @@ const SAVE_ERRORS = {
   invalid: 'That entry is not valid.',
   limit: 'You can store up to 500 lots. Remove or merge some first.',
   not_found: 'That lot no longer exists.',
+};
+
+const TRACK_ERRORS = {
+  no_price: (ticker) => `No live price for ${ticker}.`,
+  timeout: () => 'The price request timed out. Try again.',
+  network: () => 'Could not fetch a live price. Check your connection.',
 };
 
 export default function Portfolio() {
@@ -93,40 +99,15 @@ export default function Portfolio() {
     async (signal) => {
       setTrackingId(signal.id);
       setError('');
-      try {
-        const data = await getMarketQuotes([signal.ticker]);
-        const want = normalizeWatchlistSymbol(signal.ticker);
-        const quote =
-          (data?.quotes || []).find((q) => normalizeWatchlistSymbol(q.sym || q.symbol) === want) ||
-          data?.quotes?.[0];
-        const entryPrice = Number(quote?.price);
-        if (!Number.isFinite(entryPrice)) {
-          throw new Error(`No live price for ${signal.ticker}.`);
-        }
-        const saved = await track({
-          id: signal.id,
-          ticker: signal.ticker,
-          market: signal.market,
-          decision: signal.decision,
-          display_signal: signal.display_signal,
-          confidence_score: signal.confidence_score,
-          confidence_tier: signal.confidence_tier,
-          time_horizon_months: signal.time_horizon_months,
-          entry_price: entryPrice,
-          entry_at: new Date().toISOString(),
-          analysis_created_at: signal.analysis_created_at,
-          trade_date: signal.trade_date,
-          stop_loss: signal.stop_loss,
-          take_profit: signal.take_profit,
-        });
-        if (saved?.ok === false) {
-          throw new Error(SAVE_ERRORS[saved.reason] || SAVE_ERRORS.invalid);
-        }
-      } catch (err) {
-        setError(err.message || 'Failed to track signal.');
-      } finally {
-        setTrackingId(null);
+      const outcome = await trackSignal(signal, { track });
+      if (!outcome.ok && outcome.reason !== 'aborted') {
+        setError(
+          TRACK_ERRORS[outcome.reason]?.(signal.ticker) ||
+            SAVE_ERRORS[outcome.reason] ||
+            SAVE_ERRORS.invalid
+        );
       }
+      setTrackingId(null);
     },
     [track]
   );

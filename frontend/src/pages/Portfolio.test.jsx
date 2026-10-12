@@ -21,6 +21,10 @@ vi.mock('../utils/analysisHistoryApi', () => ({
     },
   ]),
 }));
+vi.mock('../utils/marketBatch', async (importOriginal) => ({
+  ...(await importOriginal()),
+  withRetry: (run) => run(), // a real retry would wait 2 s on a transient failure
+}));
 vi.mock('../hooks/useAnalysisHistoryStore', () => ({
   historyResourceId: (item) => item.request_id,
   normalizeBackendHistory: (items) => items,
@@ -235,5 +239,27 @@ describe('Portfolio page', () => {
         expect.objectContaining({ id: 'r9', entry_price: 100, stop_loss: 90, take_profit: 130 })
       )
     );
+  });
+
+  it('shows a timeout-specific message when the price request times out', async () => {
+    const { getMarketQuotes } = await import('../api/market');
+    getMarketQuotes.mockRejectedValueOnce(Object.assign(new Error('t'), { code: 'TIMEOUT' }));
+
+    render(<Portfolio />);
+    fireEvent.click(await screen.findByLabelText('Track NVDA'));
+
+    expect((await screen.findByRole('alert')).textContent).toBe(
+      'The price request timed out. Try again.'
+    );
+  });
+
+  it('reports a missing live price for the ticker', async () => {
+    const { getMarketQuotes } = await import('../api/market');
+    getMarketQuotes.mockResolvedValueOnce({ quotes: [{ sym: 'NVDA', price: null, error: true }] });
+
+    render(<Portfolio />);
+    fireEvent.click(await screen.findByLabelText('Track NVDA'));
+
+    expect((await screen.findByRole('alert')).textContent).toBe('No live price for NVDA.');
   });
 });
