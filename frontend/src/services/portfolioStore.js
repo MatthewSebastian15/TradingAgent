@@ -1,4 +1,5 @@
 import { createEncryptedListStore } from './encryptedListStore';
+import { toPrice } from '../utils/price';
 
 // Tracked AI recommendations the user has promoted from the signals feed.
 // Encrypted at rest with the same device key as the watchlist/history stores.
@@ -21,6 +22,7 @@ function normalize(entry) {
   if (!id || !ticker || !Number.isFinite(entryPrice)) return null;
 
   const horizon = Number(entry.time_horizon_months);
+  const closedAt = textOrNull(entry.closed_at);
 
   return {
     schema_version: SCHEMA_VERSION,
@@ -36,6 +38,10 @@ function normalize(entry) {
     entry_at: textOrNull(entry.entry_at) || new Date().toISOString(),
     analysis_created_at: textOrNull(entry.analysis_created_at),
     trade_date: textOrNull(entry.trade_date),
+    stop_loss: toPrice(entry.stop_loss),
+    take_profit: toPrice(entry.take_profit),
+    closed_at: closedAt,
+    exit_price: closedAt ? toPrice(entry.exit_price) : null,
   };
 }
 
@@ -56,6 +62,31 @@ export function addTracked(record) {
 
 export function removeTracked(id) {
   return store.mutate((current) => current.filter((entry) => entry.id !== id));
+}
+
+const EDITABLE = ['stop_loss', 'take_profit', 'closed_at', 'exit_price'];
+
+export function updateTracked(id, patch) {
+  return store.mutate((current) => {
+    const index = current.findIndex((entry) => entry.id === id);
+    if (index === -1) return { reason: 'not_found' };
+    const changes = Object.fromEntries(
+      EDITABLE.filter((key) => key in patch).map((key) => [key, patch[key]])
+    );
+    const merged = normalize({ ...current[index], ...changes });
+    if (!merged) return null;
+    return current.map((entry, position) => (position === index ? merged : entry));
+  });
+}
+
+// Freezes the position at `exitPrice` (a live price chosen by the caller).
+export function closeTracked(id, exitPrice) {
+  if (toPrice(exitPrice) === null) return Promise.resolve({ ok: false, reason: 'invalid' });
+  return updateTracked(id, { closed_at: new Date().toISOString(), exit_price: toPrice(exitPrice) });
+}
+
+export function reopenTracked(id) {
+  return updateTracked(id, { closed_at: null, exit_price: null });
 }
 
 export const clearTracked = () => store.clear();

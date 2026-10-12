@@ -15,9 +15,12 @@ vi.mock('./secureStorage', () => ({
 import {
   addTracked,
   clearTracked,
+  closeTracked,
   readTracked,
   readTrackedDetailed,
   removeTracked,
+  reopenTracked,
+  updateTracked,
 } from './portfolioStore';
 
 const base = {
@@ -78,5 +81,55 @@ describe('portfolioStore', () => {
 
     await clearTracked();
     expect(await addTracked(base)).toEqual({ ok: true });
+  });
+
+  it('stores optional stop-loss and take-profit and ignores invalid ones', async () => {
+    await addTracked({ ...base, stop_loss: 140, take_profit: '170' });
+    await addTracked({ ...base, id: 'job-2', stop_loss: 0, take_profit: 'nope' });
+
+    const [second, first] = await readTracked();
+    expect(first).toMatchObject({
+      stop_loss: 140,
+      take_profit: 170,
+      closed_at: null,
+      exit_price: null,
+    });
+    expect(second).toMatchObject({ stop_loss: null, take_profit: null });
+  });
+
+  it('closes a position at an exit price and can reopen it', async () => {
+    await addTracked(base);
+
+    expect(await closeTracked('job-1', 180)).toEqual({ ok: true });
+    let [position] = await readTracked();
+    expect(position.exit_price).toBe(180);
+    expect(Date.parse(position.closed_at)).not.toBeNaN();
+
+    expect(await reopenTracked('job-1')).toEqual({ ok: true });
+    [position] = await readTracked();
+    expect(position.closed_at).toBeNull();
+    expect(position.exit_price).toBeNull();
+  });
+
+  it('refuses to close without a usable exit price and reports unknown ids', async () => {
+    await addTracked(base);
+
+    expect(await closeTracked('job-1', null)).toEqual({ ok: false, reason: 'invalid' });
+    expect(await closeTracked('job-1', 0)).toEqual({ ok: false, reason: 'invalid' });
+    expect(await closeTracked('missing', 100)).toEqual({ ok: false, reason: 'not_found' });
+    expect((await readTracked())[0].closed_at).toBeNull();
+  });
+
+  it('does not let a patch change identity fields', async () => {
+    await addTracked(base);
+    await updateTracked('job-1', { id: 'hijack', entry_price: 1, ticker: 'ZZZ', stop_loss: 120 });
+
+    const [position] = await readTracked();
+    expect(position).toMatchObject({
+      id: 'job-1',
+      ticker: 'AAPL',
+      entry_price: 150,
+      stop_loss: 120,
+    });
   });
 });
