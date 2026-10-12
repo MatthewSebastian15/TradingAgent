@@ -18,6 +18,7 @@ import { useWatchlistQuotes } from '../hooks/useWatchlistQuotes';
 import { fetchAnalysisHistory } from '../utils/analysisHistoryApi';
 import { resolveCurrency } from '../utils/currency';
 import { summarizeByCurrency } from '../utils/holdingsPerf';
+import { validateHoldingInput } from '../utils/holdingsValidation';
 import { summarize } from '../utils/portfolioPerf';
 import { symbolsForTab } from '../utils/portfolioSymbols';
 import { toPrice } from '../utils/price';
@@ -35,6 +36,8 @@ const SAVE_ERRORS = {
     'Saved data on this device could not be read. Start fresh or restore a backup before saving changes.',
   write_failed: 'Could not save: browser storage is full or blocked.',
   invalid: 'That entry is not valid.',
+  limit: 'You can store up to 500 lots. Remove or merge some first.',
+  not_found: 'That lot no longer exists.',
 };
 
 function toSignal(entry) {
@@ -56,7 +59,7 @@ function toSignal(entry) {
 
 export default function Portfolio() {
   const { tracked, trackedIds, track, untrack } = usePortfolioStore();
-  const { holdings, add: addHolding, remove: removeHolding } = useHoldingsStore();
+  const { holdings, pending, add: addHolding, remove: removeHolding } = useHoldingsStore();
   const [tab, setTab] = useState('ai');
   const [signals, setSignals] = useState([]);
   const [trackingId, setTrackingId] = useState(null);
@@ -179,24 +182,13 @@ export default function Portfolio() {
   const handleAddHolding = useCallback(
     async (record) => {
       setHoldingsError('');
-      const ticker = normalizeWatchlistSymbol(record.ticker);
-      if (!ticker) {
-        setHoldingsError('Enter a ticker symbol.');
+      const checked = validateHoldingInput(record);
+      if (!checked.ok) {
+        setHoldingsError(Object.values(checked.errors)[0]);
         return false;
       }
-      if (!Number.isFinite(record.shares) || record.shares <= 0) {
-        setHoldingsError('Shares must be a positive number.');
-        return false;
-      }
-      if (!Number.isFinite(record.cost_basis) || record.cost_basis < 0) {
-        setHoldingsError('Average cost must be zero or more.');
-        return false;
-      }
-      const result = await addHolding({
-        ticker,
-        shares: record.shares,
-        cost_basis: record.cost_basis,
-      });
+      const result = await addHolding(checked.value);
+      if (result?.reason === 'busy') return false; // already saving: stay silent
       if (result?.ok === false) {
         setHoldingsError(SAVE_ERRORS[result.reason] || SAVE_ERRORS.invalid);
         return false;
@@ -252,6 +244,7 @@ export default function Portfolio() {
               onAdd={handleAddHolding}
               onRemove={removeHolding}
               error={holdingsError}
+              busy={pending}
             />
             <p className="font-mono text-[10px] leading-relaxed text-bloomberg-muted">
               Holdings are entered by you and stored encrypted on this device only. Prices and P/L

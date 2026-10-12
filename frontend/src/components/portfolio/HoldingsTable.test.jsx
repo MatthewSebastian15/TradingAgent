@@ -57,7 +57,8 @@ describe('HoldingsTable', () => {
     });
     fireEvent.click(screen.getByRole('button', { name: /Add/ }));
 
-    expect(onAdd).toHaveBeenCalledWith({ ticker: 'NVDA', shares: 5, cost_basis: 90 });
+    // Raw strings: the page validates them (a Number() here would turn "10.000" into 10).
+    expect(onAdd).toHaveBeenCalledWith({ ticker: 'NVDA', shares: '5', cost_basis: '90' });
     await waitFor(() => expect(screen.getByLabelText('Ticker').value).toBe(''));
   });
 

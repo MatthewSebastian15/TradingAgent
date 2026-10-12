@@ -140,4 +140,64 @@ describe('Portfolio page', () => {
     expect(screen.queryByText(/-100\.00%/)).toBeNull();
     expect(screen.getByText('1 unpriced')).toBeTruthy();
   });
+
+  it('disables ADD while a holding is being saved', async () => {
+    useHoldingsStore.mockImplementation(() => ({
+      holdings: [],
+      pending: true,
+      add: vi.fn(),
+      remove: vi.fn(),
+    }));
+    render(<Portfolio />);
+    await screen.findByText('NVDA');
+    fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
+
+    expect(screen.getByRole('button', { name: /Add/ }).disabled).toBe(true);
+  });
+
+  it('shows the specific field error from the shared validation', async () => {
+    const add = vi.fn();
+    useHoldingsStore.mockImplementation(() => ({
+      holdings: [],
+      pending: false,
+      add,
+      remove: vi.fn(),
+    }));
+    render(<Portfolio />);
+    await screen.findByText('NVDA');
+    fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
+
+    fireEvent.change(screen.getByLabelText('Ticker'), { target: { value: 'AAPL' } });
+    fireEvent.change(screen.getByLabelText('Shares'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Average cost per share'), { target: { value: '-3' } });
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(
+      /cannot be negative|must be a number/
+    );
+    expect(add).not.toHaveBeenCalled();
+  });
+
+  it('refuses an ambiguous share count like 10.000 instead of saving 10', async () => {
+    const add = vi.fn();
+    useHoldingsStore.mockImplementation(() => ({
+      holdings: [],
+      pending: false,
+      add,
+      remove: vi.fn(),
+    }));
+    render(<Portfolio />);
+    await screen.findByText('NVDA');
+    fireEvent.click(screen.getByRole('button', { name: 'My Holdings' }));
+
+    fireEvent.change(screen.getByLabelText('Ticker'), { target: { value: 'BBCA.JK' } });
+    fireEvent.change(screen.getByLabelText('Shares'), { target: { value: '10.000' } });
+    fireEvent.change(screen.getByLabelText('Average cost per share'), {
+      target: { value: '9000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Add/ }));
+
+    expect((await screen.findByRole('alert')).textContent).toMatch(/ambiguous/);
+    expect(add).not.toHaveBeenCalled();
+  });
 });

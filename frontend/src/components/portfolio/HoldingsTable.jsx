@@ -34,7 +34,8 @@ function AddHoldingForm({ onAdd, busy }) {
 
   const submit = (event) => {
     event.preventDefault();
-    const record = { ticker, shares: Number(shares), cost_basis: Number(cost) };
+    // Raw strings on purpose: the page validates them (Number('10.000') would be 10).
+    const record = { ticker, shares, cost_basis: cost };
     onAdd(record).then((ok) => {
       if (ok) {
         setTicker('');
