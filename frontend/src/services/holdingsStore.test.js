@@ -15,9 +15,11 @@ vi.mock('./secureStorage', () => ({
 import {
   addHolding,
   clearHoldings,
+  mergeHoldings,
   readHoldings,
   readHoldingsDetailed,
   removeHolding,
+  replaceHoldings,
   updateHolding,
 } from './holdingsStore';
 
@@ -189,5 +191,50 @@ describe('holdingsStore', () => {
       });
       expect((await readHoldings())[0].shares).toBe(10);
     });
+  });
+});
+
+describe('merge / replace', () => {
+  const lot = (id, ticker, shares = 1) => ({
+    id,
+    ticker,
+    shares,
+    cost_basis: 10,
+    added_at: '2026-01-01T00:00:00.000Z',
+  });
+
+  it('merge adds unknown ids and never overwrites an existing lot', async () => {
+    await addHolding({ id: 'a', ticker: 'AAPL', shares: 5, cost_basis: 100 });
+
+    expect(await mergeHoldings([lot('a', 'AAPL', 999), lot('b', 'MSFT')])).toEqual({ ok: true });
+
+    const after = await readHoldings();
+    expect(after.map((entry) => entry.id).sort()).toEqual(['a', 'b']);
+    expect(after.find((entry) => entry.id === 'a').shares).toBe(5); // local state wins
+  });
+
+  it('merge skips invalid rows and honours the lot cap', async () => {
+    await mergeHoldings([lot('a', 'AAPL'), { id: 'bad', ticker: '', shares: 1, cost_basis: 1 }]);
+    expect(await readHoldings()).toHaveLength(1);
+
+    const many = Array.from({ length: 501 }, (_, index) => lot(`id-${index}`, 'AAPL'));
+    expect(await mergeHoldings(many)).toEqual({ ok: false, reason: 'limit' });
+    expect(await readHoldings()).toHaveLength(1);
+  });
+
+  it('replace swaps the whole list, and an empty replace clears it', async () => {
+    await addHolding({ ticker: 'AAPL', shares: 1, cost_basis: 1 });
+
+    await replaceHoldings([lot('z', 'NVDA', 3)]);
+    expect((await readHoldings()).map((entry) => entry.ticker)).toEqual(['NVDA']);
+
+    await replaceHoldings([]);
+    expect(localStorage.getItem('portfolio_holdings_v1')).toBeNull();
+  });
+
+  it('both refuse to write over an unreadable blob', async () => {
+    localStorage.setItem('portfolio_holdings_v1', JSON.stringify({ v: 1, iv: 'a', ct: 'b' }));
+    expect(await mergeHoldings([lot('a', 'AAPL')])).toEqual({ ok: false, reason: 'unreadable' });
+    expect(await replaceHoldings([lot('a', 'AAPL')])).toEqual({ ok: false, reason: 'unreadable' });
   });
 });

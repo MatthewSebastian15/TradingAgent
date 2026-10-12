@@ -16,10 +16,12 @@ import {
   addTracked,
   clearTracked,
   closeTracked,
+  mergeTracked,
   readTracked,
   readTrackedDetailed,
   removeTracked,
   reopenTracked,
+  replaceTracked,
   updateTracked,
 } from './portfolioStore';
 
@@ -131,5 +133,30 @@ describe('portfolioStore', () => {
       entry_price: 150,
       stop_loss: 120,
     });
+  });
+});
+
+describe('merge / replace', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('merge keeps local state for known ids (a locally closed position stays closed)', async () => {
+    await addTracked(base);
+    await closeTracked('job-1', 180);
+
+    await mergeTracked([
+      { ...base, entry_price: 1 },
+      { ...base, id: 'job-2', ticker: 'MSFT' },
+    ]);
+
+    const byId = Object.fromEntries((await readTracked()).map((entry) => [entry.id, entry]));
+    expect(byId['job-1'].closed_at).not.toBeNull();
+    expect(byId['job-1'].entry_price).toBe(150);
+    expect(byId['job-2'].ticker).toBe('MSFT');
+  });
+
+  it('replace swaps the tracked list', async () => {
+    await addTracked(base);
+    await replaceTracked([{ ...base, id: 'only', ticker: 'NVDA' }]);
+    expect((await readTracked()).map((entry) => entry.id)).toEqual(['only']);
   });
 });

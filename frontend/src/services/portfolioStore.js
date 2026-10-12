@@ -89,4 +89,20 @@ export function reopenTracked(id) {
   return updateTracked(id, { closed_at: null, exit_price: null });
 }
 
+export const normalizeTrackedRecord = normalize;
+
+// Existing ids win: a position closed locally stays closed.
+export function mergeTracked(items) {
+  return store.mutate((current) => {
+    const known = new Set(current.map((entry) => entry.id));
+    const fresh = items.map(normalize).filter((entry) => entry && !known.has(entry.id));
+    return [...fresh, ...current];
+  });
+}
+
+export function replaceTracked(items) {
+  const next = items.map(normalize).filter(Boolean);
+  return store.mutate(() => next);
+}
+
 export const clearTracked = () => store.clear();

@@ -65,4 +65,21 @@ export function removeHolding(id) {
   return store.mutate((current) => current.filter((entry) => entry.id !== id));
 }
 
+export const normalizeHolding = normalize;
+
+// Existing ids win: a local edit is never overwritten by an older backup.
+export function mergeHoldings(items) {
+  return store.mutate((current) => {
+    const known = new Set(current.map((entry) => entry.id));
+    const fresh = items.map(normalize).filter((entry) => entry && !known.has(entry.id));
+    const next = [...fresh, ...current];
+    return next.length > MAX_LOTS ? { reason: 'limit' } : next;
+  });
+}
+
+export function replaceHoldings(items) {
+  const next = items.map(normalize).filter(Boolean);
+  return store.mutate(() => (next.length > MAX_LOTS ? { reason: 'limit' } : next));
+}
+
 export const clearHoldings = () => store.clear();
