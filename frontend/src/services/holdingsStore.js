@@ -1,4 +1,5 @@
 import { createEncryptedListStore } from './encryptedListStore';
+import { MAX_LOTS } from '../utils/holdingsValidation';
 
 // User-entered portfolio holdings (real positions they own). Encrypted at rest
 // with the same device key as the watchlist/history/tracked stores.
@@ -38,7 +39,25 @@ export async function readHoldings() {
 export function addHolding(record) {
   return store.mutate((current) => {
     const next = normalize(record);
-    return next ? [next, ...current] : null;
+    if (!next) return null;
+    const without = current.filter((entry) => entry.id !== next.id); // idempotent: undo restores the exact lot
+    if (without.length >= MAX_LOTS) return { reason: 'limit' };
+    return [next, ...without];
+  });
+}
+
+const EDITABLE = ['ticker', 'shares', 'cost_basis'];
+
+export function updateHolding(id, patch) {
+  return store.mutate((current) => {
+    const index = current.findIndex((entry) => entry.id === id);
+    if (index === -1) return { reason: 'not_found' };
+    const changes = Object.fromEntries(
+      EDITABLE.filter((key) => key in patch).map((key) => [key, patch[key]])
+    );
+    const merged = normalize({ ...current[index], ...changes }); // keeps id and added_at
+    if (!merged) return null;
+    return current.map((entry, position) => (position === index ? merged : entry));
   });
 }
 

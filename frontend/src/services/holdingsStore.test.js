@@ -18,6 +18,7 @@ import {
   readHoldings,
   readHoldingsDetailed,
   removeHolding,
+  updateHolding,
 } from './holdingsStore';
 
 beforeEach(() => {
@@ -112,5 +113,81 @@ describe('holdingsStore', () => {
 
     expect(await addHolding({ ticker: 'AAPL', shares: 1, cost_basis: 1 })).toEqual({ ok: true });
     expect(await readHoldings()).toHaveLength(1);
+  });
+
+  it('add is idempotent by id so an undo restores the exact lot', async () => {
+    await addHolding({ ticker: 'AAPL', shares: 10, cost_basis: 100 });
+    const [lot] = await readHoldings();
+
+    await removeHolding(lot.id);
+    expect(await readHoldings()).toEqual([]);
+
+    await addHolding(lot);
+    await addHolding(lot); // double restore must not duplicate
+    const restored = await readHoldings();
+    expect(restored).toEqual([lot]);
+    expect(restored[0].added_at).toBe(lot.added_at);
+  });
+
+  it('refuses to exceed the lot cap', async () => {
+    const lots = Array.from({ length: 500 }, (_, i) => ({
+      schema_version: 1,
+      id: `id-${i}`,
+      ticker: 'AAPL',
+      shares: 1,
+      cost_basis: 1,
+      added_at: '2026-01-01T00:00:00.000Z',
+    }));
+    localStorage.setItem('portfolio_holdings_v1', JSON.stringify(lots));
+
+    expect(await addHolding({ ticker: 'MSFT', shares: 1, cost_basis: 1 })).toEqual({
+      ok: false,
+      reason: 'limit',
+    });
+    expect(await readHoldings()).toHaveLength(500);
+  });
+
+  describe('updateHolding', () => {
+    it('edits shares, cost and ticker in place, keeping id, date and position', async () => {
+      await addHolding({ ticker: 'AAPL', shares: 10, cost_basis: 100 });
+      await addHolding({ ticker: 'MSFT', shares: 1, cost_basis: 1 });
+      const [msft, aapl] = await readHoldings();
+
+      expect(
+        await updateHolding(aapl.id, { shares: 12, cost_basis: 95, ticker: 'aapl.us' })
+      ).toEqual({ ok: true });
+
+      const after = await readHoldings();
+      expect(after.map((lot) => lot.id)).toEqual([msft.id, aapl.id]); // order unchanged
+      expect(after[1]).toMatchObject({ ticker: 'AAPL.US', shares: 12, cost_basis: 95 });
+      expect(after[1].added_at).toBe(aapl.added_at);
+    });
+
+    it('ignores fields that are not editable', async () => {
+      await addHolding({ ticker: 'AAPL', shares: 10, cost_basis: 100 });
+      const [lot] = await readHoldings();
+
+      await updateHolding(lot.id, { id: 'hijack', added_at: '1999-01-01', shares: 11 });
+
+      const [after] = await readHoldings();
+      expect(after.id).toBe(lot.id);
+      expect(after.added_at).toBe(lot.added_at);
+      expect(after.shares).toBe(11);
+    });
+
+    it('reports not_found and invalid without writing', async () => {
+      await addHolding({ ticker: 'AAPL', shares: 10, cost_basis: 100 });
+      const [lot] = await readHoldings();
+
+      expect(await updateHolding('missing', { shares: 1 })).toEqual({
+        ok: false,
+        reason: 'not_found',
+      });
+      expect(await updateHolding(lot.id, { shares: -4 })).toEqual({
+        ok: false,
+        reason: 'invalid',
+      });
+      expect((await readHoldings())[0].shares).toBe(10);
+    });
   });
 });
