@@ -30,7 +30,59 @@ export function returnPct(decision, entry, current) {
   return direction === 0 ? raw : raw * direction;
 }
 
-// positions: [{ ticker, decision, entry_price }]; priceFor: (ticker) => number.
+export const POSITION_STATUS = Object.freeze({
+  OPEN: 'OPEN',
+  TARGET: 'TARGET_HIT',
+  STOP: 'STOP_HIT',
+  MATURED: 'MATURED',
+  CLOSED: 'CLOSED',
+});
+
+// Levels on the wrong side of the entry (or on a neutral decision) are unusable.
+export function usableLevels(decision, entry, stop, target) {
+  const direction = decisionDirection(decision);
+  const entryPrice = toPrice(entry);
+  const stopPrice = toPrice(stop);
+  const targetPrice = toPrice(target);
+  if (direction === 0 || entryPrice === null) return { stop: null, target: null };
+  const stopOk =
+    stopPrice !== null && (direction > 0 ? stopPrice < entryPrice : stopPrice > entryPrice);
+  const targetOk =
+    targetPrice !== null && (direction > 0 ? targetPrice > entryPrice : targetPrice < entryPrice);
+  return { stop: stopOk ? stopPrice : null, target: targetOk ? targetPrice : null };
+}
+
+// current: live price or null. Price events outrank maturity.
+export function positionStatus(position, current) {
+  if (position.closed_at) return POSITION_STATUS.CLOSED;
+  const direction = decisionDirection(position.decision);
+  const price = toPrice(current);
+  const { stop, target } = usableLevels(
+    position.decision,
+    position.entry_price,
+    position.stop_loss,
+    position.take_profit
+  );
+  if (price !== null) {
+    if (target !== null && (direction > 0 ? price >= target : price <= target)) {
+      return POSITION_STATUS.TARGET;
+    }
+    if (stop !== null && (direction > 0 ? price <= stop : price >= stop)) {
+      return POSITION_STATUS.STOP;
+    }
+  }
+  return horizonInfo(position.entry_at, position.time_horizon_months).matured
+    ? POSITION_STATUS.MATURED
+    : POSITION_STATUS.OPEN;
+}
+
+// A closed position's return is frozen at its exit price.
+export function positionReturn(position, current) {
+  const price = position.closed_at ? position.exit_price : current;
+  return returnPct(position.decision, position.entry_price, price);
+}
+
+// positions: [{ ticker, decision, entry_price, ... }]; priceFor: (ticker) => number.
 export function summarize(positions, priceFor) {
   let valued = 0;
   let directional = 0;
@@ -38,9 +90,20 @@ export function summarize(positions, priceFor) {
   let sumReturn = 0;
   let best = null;
   let worst = null;
+  let openCount = 0;
+  let closedCount = 0;
+  let targetHits = 0;
+  let stopHits = 0;
 
   for (const position of positions) {
-    const ret = returnPct(position.decision, position.entry_price, priceFor(position.ticker));
+    const current = priceFor(position.ticker);
+    const status = positionStatus(position, current);
+    if (status === POSITION_STATUS.CLOSED) closedCount += 1;
+    else openCount += 1;
+    if (status === POSITION_STATUS.TARGET) targetHits += 1;
+    if (status === POSITION_STATUS.STOP) stopHits += 1;
+
+    const ret = positionReturn(position, current);
     if (ret === null) continue;
 
     valued += 1;
@@ -57,6 +120,11 @@ export function summarize(positions, priceFor) {
   return {
     trackedCount: positions.length,
     valuedCount: valued,
+    openCount,
+    closedCount,
+    targetHits,
+    stopHits,
+    sampleSize: directional, // positions behind the win rate
     winRate: directional ? wins / directional : null,
     avgReturn: valued ? sumReturn / valued : null,
     best,
