@@ -2,13 +2,19 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useHoldingsStore } from './useHoldingsStore';
-import { addHolding, readHoldingsDetailed, removeHolding } from '../services/holdingsStore';
+import {
+  addHolding,
+  readHoldingsDetailed,
+  removeHolding,
+  updateHolding,
+} from '../services/holdingsStore';
 
 vi.mock('../services/holdingsStore', () => ({
   addHolding: vi.fn(),
   readHoldingsDetailed: vi.fn(),
   removeHolding: vi.fn(),
   clearHoldings: vi.fn(),
+  updateHolding: vi.fn(),
   HOLDINGS_STORAGE_KEY: 'portfolio_holdings_v1',
 }));
 
@@ -19,6 +25,7 @@ describe('useHoldingsStore', () => {
     readHoldingsDetailed.mockResolvedValue(ok([]));
     addHolding.mockResolvedValue({ ok: true });
     removeHolding.mockResolvedValue({ ok: true });
+    updateHolding.mockResolvedValue({ ok: true });
   });
 
   afterEach(() => {
@@ -67,5 +74,44 @@ describe('useHoldingsStore', () => {
     readHoldingsDetailed.mockResolvedValue({ items: [], status: 'empty' });
     await act(() => result.current.resetUnreadable());
     expect(result.current.storageStatus).toBe('ok');
+  });
+
+  it('ignores a second add while the first is in flight (double click)', async () => {
+    addHolding.mockClear(); // call history survives restoreAllMocks in Vitest 4
+    let release;
+    addHolding.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ ok: true });
+        })
+    );
+    const { result } = renderHook(() => useHoldingsStore());
+    await waitFor(() => expect(result.current.hydrated).toBe(true));
+
+    let first;
+    let second;
+    await act(async () => {
+      first = result.current.add({ ticker: 'AAPL', shares: 1, cost_basis: 1 });
+      second = result.current.add({ ticker: 'AAPL', shares: 1, cost_basis: 1 });
+      await Promise.resolve();
+    });
+
+    expect(result.current.pending).toBe(true);
+    expect(await second).toEqual({ ok: false, reason: 'busy' });
+    await act(async () => {
+      release();
+      await first;
+    });
+    expect(addHolding).toHaveBeenCalledTimes(1);
+    expect(result.current.pending).toBe(false);
+  });
+
+  it('update edits by id then refreshes', async () => {
+    const { result } = renderHook(() => useHoldingsStore());
+    await waitFor(() => expect(result.current.hydrated).toBe(true));
+
+    await act(() => result.current.update('h1', { shares: 9 }));
+
+    expect(updateHolding).toHaveBeenCalledWith('h1', { shares: 9 });
   });
 });
